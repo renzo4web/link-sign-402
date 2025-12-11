@@ -5,6 +5,7 @@ import viteReact from '@vitejs/plugin-react'
 import viteTsConfigPaths from 'vite-tsconfig-paths'
 import tailwindcss from '@tailwindcss/vite'
 import { cloudflare } from '@cloudflare/vite-plugin'
+import path from 'path'
 
 const config = defineConfig({
   plugins: [
@@ -18,6 +19,12 @@ const config = defineConfig({
     tanstackStart(),
     viteReact(),
   ],
+  resolve: {
+    alias: {
+      // Minimal crypto shim for @faremeter/payment-evm (only needs randomBytes)
+      crypto: path.resolve(__dirname, 'src/lib/crypto-shim.ts'),
+    },
+  },
 })
 
 export default config

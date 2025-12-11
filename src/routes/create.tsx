@@ -206,7 +206,7 @@ function CreatePage() {
                 connectors.map((connector) => (
                 <Button
                     key={connector.uid}
-                    onClick={() => connect({ connector })}
+                    onClick={() => connect({ connector, chainId: expectedChainId })}
                     variant="outline"
                     className="w-full justify-between"
                     size="lg"

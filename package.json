@@ -4,11 +4,12 @@
 	"type": "module",
 	"scripts": {
 		"validate-env": "tsx scripts/validate-env.ts",
+		"sync-wrangler": "tsx scripts/sync-wrangler-vars.ts",
 		"dev": "pnpm validate-env && vite dev --port 3333",
 		"build": "pnpm validate-env && vite build",
 		"serve": "vite preview",
 		"test": "vitest run",
-		"deploy": "pnpm run build && wrangler deploy",
+		"deploy": "SKIP_ENV_VALIDATION=true pnpm run build && wrangler deploy",
 		"preview": "pnpm run build && vite preview",
 		"cf-typegen": "wrangler types"
 	},

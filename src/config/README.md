@@ -72,9 +72,24 @@ function ClientComponent() {
 }
 ```
 
-## 🔧 Agregar Nueva Variable
+## � Wrangler Integration
 
-### Paso 1: Agregar a `.env`
+The project uses both Vite and Wrangler. To keep variables in sync:
+
+```bash
+# After editing .env, sync to Wrangler
+pnpm sync-wrangler
+```
+
+This auto-generates `.dev.vars` from your `.env` (server variables only).
+
+For production Cloudflare Workers:
+- **Secrets**: Use `wrangler secret put CDP_API_KEY_ID`
+- **Public vars**: Add to `wrangler.jsonc` under `vars` section
+
+## 🔧 Adding a New Variable
+
+### Step 1: Add to `.env`
 
 ```bash
 # Para servidor (secreto)

@@ -42,6 +42,13 @@ function logInfo(message: string) {
   log('blue', `ℹ️  ${message}`)
 }
 
+// Skip validation if building for Cloudflare Workers deployment
+if (process.env.SKIP_ENV_VALIDATION === 'true') {
+  logInfo('Skipping env validation (SKIP_ENV_VALIDATION=true)')
+  logInfo('Assuming env vars are set in Cloudflare Workers')
+  process.exit(0)
+}
+
 // Check if .env file exists
 const envPath = join(process.cwd(), '.env')
 if (!existsSync(envPath)) {

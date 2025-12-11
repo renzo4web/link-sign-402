@@ -19,14 +19,37 @@ import { wrap as wrapFetch } from '@faremeter/fetch'
 import { getWalletClient } from 'wagmi/actions'
 import { wagmiConfig } from '../lib/wagmi'
 import { getClientConfig } from '../config/env'
+import { ArrowRight, Loader2, Wallet, AlertCircle, CheckCircle2, HelpCircle } from 'lucide-react'
+
+import { Button } from '../components/ui/button'
+import { Textarea } from '../components/ui/textarea'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '../components/ui/card'
+import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert'
+import { Label } from '../components/ui/label'
+import { Skeleton } from '../components/ui/skeleton'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '../components/ui/tooltip'
+import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar'
 
 export const Route = createFileRoute('/create')({
-  ssr: false, // Deshabilitar SSR para evitar errores de hidratación con Wagmi
-  component: CreateTest,
+  ssr: false, // Disable SSR to avoid hydration errors with Wagmi
+  component: CreatePage,
 })
 
-function CreateTest() {
-  const [result, setResult] = useState('')
+function CreatePage() {
+  const [text, setText] = useState('')
+  const [result, setResult] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [paymentWallet, setPaymentWallet] = useState<{
     chain: { id: number; name: string }
@@ -42,6 +65,7 @@ function CreateTest() {
   const { disconnect } = useDisconnect()
   const { switchChain, isPending: isSwitchingChain } = useSwitchChain()
   const { data: walletClient } = useWalletClient({ connector: activeConnector })
+  
   // Get configuration
   const config = getClientConfig()
   
@@ -60,20 +84,17 @@ function CreateTest() {
   const expectedChainId = getExpectedChainId()
   const isCorrectChain = chainId === expectedChainId
 
-  // Build the wallet for payment when walletClient is available (with fallback fetch)
-  // Only resolve when on the correct chain to avoid ConnectorChainMismatchError
+  // Build the wallet for payment when walletClient is available
   useEffect(() => {
     let cancelled = false
 
     const resolveClient = async () => {
-      // Don't try to resolve if on wrong chain - will cause mismatch error
       if (!isCorrectChain) {
         if (!cancelled) setPaymentWallet(null)
         return
       }
 
       try {
-        // Use walletClient from hook if available, otherwise fetch without forcing chainId
         const client =
           walletClient ??
           (await getWalletClient(wagmiConfig).catch(() => null))
@@ -83,7 +104,6 @@ function CreateTest() {
           return
         }
 
-        // Determine the default chain name based on environment variables
         const getDefaultChainName = () => {
           const networkName = config.blockchain.networkName
           switch (networkName.toLowerCase()) {
@@ -107,7 +127,7 @@ function CreateTest() {
         }
         if (!cancelled) setPaymentWallet(wallet)
       } catch (err) {
-        console.error('[CreateTest] Failed to resolve wallet client', err)
+        console.error('[Create] Failed to resolve wallet client', err)
         if (!cancelled) setPaymentWallet(null)
       }
     }
@@ -117,134 +137,218 @@ function CreateTest() {
     return () => {
       cancelled = true
     }
-  }, [walletClient, isCorrectChain])
+  }, [walletClient, isCorrectChain, chainId, expectedChainId, config.blockchain.networkName])
 
-  // Logs para debugging
-  console.log('[CreateTest] Render:', {
-    isConnected,
-    address: address?.slice(0, 10),
-    chainId,
-    connectorsCount: connectors.length,
-    activeConnector: activeConnector?.name,
-    hasWalletClient: !!walletClient,
-    hasPaymentWallet: !!paymentWallet,
-    isCorrectChain,
-    environment: typeof window !== 'undefined' ? 'client' : 'server',
-  })
+  const handleCreate = async () => {
+    if (!paymentWallet || !text.trim()) return
+    if (!isCorrectChain) return
 
-  const testCreate = async () => {
-    if (!paymentWallet) {
-      console.error('[CreateTest] testCreate error: Wallet client unavailable')
-      setResult('Error: Wallet not connected')
-      return
-    }
-
-    if (!isCorrectChain) {
-      console.error('[CreateTest] testCreate error: Wrong network', chainId)
-      setResult('Error: Wrong network. Please switch to Base Sepolia')
-      return
-    }
-
-    console.log('[CreateTest] testCreate: Starting payment...')
     setLoading(true)
+    setResult(null)
+
     try {
-      const docHash =
-        '0x' +
-        crypto
-          .getRandomValues(new Uint8Array(32))
-          .reduce((s, b) => s + b.toString(16).padStart(2, '0'), '')
-      console.log('[CreateTest] Generated docHash:', docHash)
+      // 1. Hash the text content
+      const encoder = new TextEncoder()
+      const data = encoder.encode(text)
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+      const hashArray = Array.from(new Uint8Array(hashBuffer))
+      const docHash = '0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+      
+      console.log('[Create] Generated docHash:', docHash)
 
       const fetchWithPayer = wrapFetch(fetch, {
         handlers: [createPaymentHandler(paymentWallet)],
       })
-      console.log('[CreateTest] Fetch wrapper created')
 
-      console.log('[CreateTest] Calling /api/create...')
       const res = await fetchWithPayer('/api/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ docHash }),
       })
-      console.log('[CreateTest] Response status:', res.status)
 
-      const headers = Object.fromEntries(res.headers)
-      const body = await res.text()
-      console.log('[CreateTest] Response body:', body)
+      const body = await res.json() as any
+      
+      if (res.ok) {
+        setResult({ success: true, data: body })
+      } else {
+        setResult({ success: false, error: body.error || 'Failed to create' })
+      }
 
-      setResult(
-        `Status: ${res.status}\n\nHeaders:\n${JSON.stringify(headers, null, 2)}\n\nBody:\n${body}`
-      )
-    } catch (e) {
-      console.error('[CreateTest] Error during payment:', e)
-      setResult(`Error: ${e}`)
+    } catch (e: any) {
+      console.error('[Create] Error:', e)
+      setResult({ success: false, error: e.message || String(e) })
     }
     setLoading(false)
-    console.log('[CreateTest] testCreate: Finished')
   }
 
+  // --- CONNECT SCREEN ---
   if (!isConnected) {
     return (
-      <div className="p-8">
-        <h1 className="text-2xl font-bold mb-4">Test /api/create (x402)</h1>
-        <p className="mb-4 text-gray-600">Precio: {config.payment.price} USDC en {config.blockchain.networkName}</p>
-        <p className="mb-4 text-gray-500">Conecta tu wallet para continuar</p>
-        <div className="flex flex-wrap gap-2">
-          {connectors.map((connector) => (
-            <button
-              key={connector.uid}
-              onClick={() => connect({ connector })}
-              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
-            >
-              Connect {connector.name}
-            </button>
-          ))}
-        </div>
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
+        
+        <Card className="w-full max-w-md z-10">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 bg-primary/10 p-3 rounded-full w-fit">
+              <Wallet className="w-8 h-8 text-primary" />
+            </div>
+            <CardTitle className="text-2xl">Connect Wallet</CardTitle>
+            <CardDescription>
+              To create a digital handshake, please connect your wallet first.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            {isCorrectChain && paymentWallet === null && isConnected ? (
+              <div className="space-y-3">
+                 <Skeleton className="h-12 w-full rounded-md" />
+                 <Skeleton className="h-12 w-full rounded-md" />
+              </div>
+            ) : (
+                connectors.map((connector) => (
+                <Button
+                    key={connector.uid}
+                    onClick={() => connect({ connector })}
+                    variant="outline"
+                    className="w-full justify-between"
+                    size="lg"
+                >
+                    {connector.name}
+                    <ArrowRight className="w-4 h-4 ml-2 opacity-50" />
+                </Button>
+                ))
+            )}
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
+  // --- CREATE SCREEN ---
   return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold mb-4">Test /api/create (x402)</h1>
-      <p className="mb-4 text-gray-600">Precio: {config.payment.price} USDC en {config.blockchain.networkName}</p>
-      <div className="mb-4 flex items-center gap-4">
-        <span className="text-sm text-gray-500">
-          Connected: {address?.slice(0, 6)}...{address?.slice(-4)}
-        </span>
-        <button
-          onClick={() => disconnect()}
-          className="text-sm text-red-500 hover:underline"
-        >
-          Disconnect
-        </button>
-      </div>
-      {!isCorrectChain && (
-        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded">
-          <p className="text-sm text-amber-700 mb-2">
-            Wrong network detected (chain {chainId}). This app requires {config.blockchain.networkName}.
-          </p>
-          <button
-            onClick={() => switchChain({ chainId: expectedChainId })}
-            disabled={isSwitchingChain}
-            className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded text-sm disabled:opacity-50"
-          >
-            {isSwitchingChain ? 'Switching...' : 'Switch to Base Sepolia'}
-          </button>
+    <div className="min-h-screen bg-background text-foreground p-6">
+      
+      <div className="max-w-2xl mx-auto pt-10">
+        <div className="flex items-center justify-between mb-8">
+           <h1 className="text-3xl font-bold">New Handshake</h1>
+           <div className="flex items-center gap-4">
+             {address && (
+                <div className="flex items-center gap-2 bg-muted/50 pl-2 pr-4 py-1.5 rounded-full border">
+                  <Avatar className="h-6 w-6">
+                    <AvatarImage src={`https://effigy.im/a/${address}.png`} />
+                    <AvatarFallback>Ox</AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm font-medium">
+                    {address.slice(0, 6)}...{address.slice(-4)}
+                  </span>
+                </div>
+             )}
+             <Button 
+               variant="ghost" 
+               size="sm"
+               className="text-destructive hover:text-destructive hover:bg-destructive/10"
+               onClick={() => disconnect()}
+             >
+               Disconnect
+             </Button>
+           </div>
         </div>
-      )}
-      <button
-        onClick={testCreate}
-        disabled={loading || !paymentWallet || !isCorrectChain}
-        className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded disabled:opacity-50"
-      >
-        {loading ? 'Calling...' : 'Call /api/create'}
-      </button>
-      {result && (
-        <pre className="mt-4 p-4 bg-gray-100 rounded text-sm overflow-auto max-h-96">
-          {result}
-        </pre>
-      )}
+
+        {!isCorrectChain && (
+          <Alert variant="error" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Wrong Network</AlertTitle>
+            <AlertDescription className="flex items-center justify-between">
+              <span>This app requires {config.blockchain.networkName}.</span>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="ml-4"
+                onClick={() => switchChain({ chainId: expectedChainId })}
+                disabled={isSwitchingChain}
+              >
+                {isSwitchingChain ? 'Switching...' : 'Switch Network'}
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <Card className="shadow-xl">
+          <CardHeader>
+            <CardTitle className="text-white">Start Agreement</CardTitle>
+            <CardDescription className="text-slate-400">
+              Write your agreement text below. This will be hashed and stored on-chain.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="agreement" className="text-slate-300">Agreement Text</Label>
+              <Textarea
+                id="agreement"
+                placeholder="I, [Name], agree to..."
+                className="min-h-[200px] resize-none"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-sm text-muted-foreground p-3 border rounded-lg">
+              <div className="flex items-center gap-2">
+                <span>Cost to Create</span>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger className="cursor-default">
+                      <HelpCircle className="h-4 w-4 opacity-50 hover:opacity-100 transition-opacity" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Includes $0.25 setup fee.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <span className="font-mono">{config.payment.price} USDC</span>
+            </div>
+          </CardContent>
+          <CardFooter className="flex flex-col gap-4">
+            <Button
+              className="w-full"
+              size="lg"
+              disabled={loading || !paymentWallet || !text.trim() || !isCorrectChain}
+              onClick={handleCreate}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                'Create & Pay'
+              )}
+            </Button>
+            
+            {result?.success && (
+               <Alert variant="success" className="border-green-900 text-green-300 bg-green-950/20">
+                <CheckCircle2 className="h-4 w-4 text-green-400" />
+                <AlertTitle>Success!</AlertTitle>
+                <AlertDescription>
+                  Agreement created successfully.
+                  <div className="mt-2 text-xs font-mono opacity-80 break-all">
+                    Hash: {JSON.stringify(result.data)}
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+            
+            {result?.success === false && (
+              <Alert variant="error" className="border-red-900 text-red-300 bg-red-950/20">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>
+                  {result.error}
+                </AlertDescription>
+              </Alert>
+            )}
+          </CardFooter>
+        </Card>
+      </div>
     </div>
   )
 }

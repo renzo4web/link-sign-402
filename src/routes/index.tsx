@@ -1,74 +1,127 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { FileSignature, Shield, Wallet } from 'lucide-react'
+import { FileSignature, Shield, Wallet, ArrowRight } from 'lucide-react'
+import { Button } from '../components/ui/button'
+import { Badge } from '../components/ui/badge'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '../components/ui/card'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../components/ui/accordion'
+import { getClientConfig } from '../config/env'
 
 export const Route = createFileRoute('/')({ component: Home })
 
 function Home() {
+  const config = getClientConfig()
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
-      <section className="relative py-20 px-6 text-center">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center justify-center gap-4 mb-6">
-            <FileSignature size={64} className="text-cyan-400" />
-            <h1 className="text-5xl md:text-6xl font-black text-white">
-              LinkSign
-            </h1>
-          </div>
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="max-w-5xl mx-auto px-6">
 
-          <p className="text-2xl text-gray-300 mb-4">
-            Digital handshakes on the blockchain
+        {/* Hero Section - Clean typography */}
+        <section className="py-24 text-center">
+          <Badge variant="outline" className="mb-8 font-normal">
+            <span className="flex h-2 w-2 rounded-full bg-primary animate-pulse mr-2" />
+            Live on Base Sepolia
+          </Badge>
+          
+          <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight mb-6">
+            Write. Pay. Sign. <br />
+            <span className="text-primary">On Chain.</span>
+          </h1>
+
+          <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
+            Create agreements that are verified, immutable, and permanent. 
+            The digital handshake for the crypto era.
           </p>
 
-          <p className="text-lg text-gray-400 max-w-2xl mx-auto mb-8">
-            Write. Pay. Sign. On chain. Create agreements that are verified and
-            immutable using x402 payments and blockchain signatures.
-          </p>
-
-          <Link
-            to="/create"
-            className="inline-block px-8 py-3 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-cyan-500/50"
-          >
-            Start a new handshake
+          <Link to="/create">
+            <Button size="lg">
+              Start a New Handshake
+              <ArrowRight className="ml-2 w-4 h-4" />
+            </Button>
           </Link>
-        </div>
-      </section>
+        </section>
 
-      <section className="py-16 px-6 max-w-5xl mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-            <Wallet className="w-10 h-10 text-cyan-400 mb-4" />
-            <h3 className="text-xl font-semibold text-white mb-2">
-              No accounts needed
-            </h3>
-            <p className="text-gray-400">
-              Just connect your wallet. No emails, no passwords, no accounts to
-              manage.
-            </p>
-          </div>
+        {/* Features - Standard Grid with Cards */}
+        <section className="py-12 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card>
+            <CardHeader>
+              <Wallet className="w-10 h-10 text-primary mb-2" />
+              <CardTitle>No Accounts</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="text-base">
+                Just connect your wallet. No emails, no passwords, no accounts to manage. 
+                Pure Web3 experience.
+              </CardDescription>
+            </CardContent>
+          </Card>
 
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-            <Shield className="w-10 h-10 text-cyan-400 mb-4" />
-            <h3 className="text-xl font-semibold text-white mb-2">
-              Pay with x402
-            </h3>
-            <p className="text-gray-400">
-              Micropayments via the x402 protocol. Create for $0.25, sign for
-              $0.10.
-            </p>
-          </div>
+          <Card>
+            <CardHeader>
+              <Shield className="w-10 h-10 text-primary mb-2" />
+              <CardTitle>Pay with x402</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="text-base">
+                Seamless micropayments via the x402 protocol. 
+                Create for {config.payment.price} USDC.
+              </CardDescription>
+            </CardContent>
+          </Card>
 
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-            <FileSignature className="w-10 h-10 text-cyan-400 mb-4" />
-            <h3 className="text-xl font-semibold text-white mb-2">
-              Blockchain proof
-            </h3>
-            <p className="text-gray-400">
-              Your agreement fingerprint is stored on-chain. Immutable and
-              verifiable forever.
-            </p>
-          </div>
-        </div>
-      </section>
+          <Card>
+            <CardHeader>
+              <FileSignature className="w-10 h-10 text-primary mb-2" />
+              <CardTitle>Blockchain Proof</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CardDescription className="text-base">
+                Your agreement fingerprint is stored on-chain. 
+                Immutable, verifiable, and permanent.
+              </CardDescription>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* FAQ Section */}
+        <section className="py-20 max-w-3xl mx-auto">
+          <h2 className="text-3xl font-bold text-center mb-12">Frequently Asked Questions</h2>
+          <Accordion className="w-full">
+            <AccordionItem value="item-1">
+              <AccordionTrigger>What is LinkSign?</AccordionTrigger>
+              <AccordionContent>
+                LinkSign is a decentralized tool for creating immutable, verifiable agreements on the blockchain. 
+                Think of it as a "digital handshake" that lives forever on-chain.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="item-2">
+              <AccordionTrigger>How much does it cost?</AccordionTrigger>
+              <AccordionContent>
+                We use the x402 protocol for micropayments. It costs exactly {config.payment.price} USDC to create an agreement.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="item-3">
+              <AccordionTrigger>Do I need an account?</AccordionTrigger>
+              <AccordionContent>
+                No. You only need a crypto wallet (like Metamask, Coinbase Wallet, or Rainbow). 
+                We don't store your email, password, or personal data.
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="item-4">
+              <AccordionTrigger>Is this legally binding?</AccordionTrigger>
+              <AccordionContent>
+               LinkSign serves as cryptographic proof of intent and agreement. While it creates immutable evidence 
+               verified by wallet signatures, legal enforceability depends on your local jurisdiction's laws regarding digital signatures.
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </section>
+      </div>
     </div>
   )
 }

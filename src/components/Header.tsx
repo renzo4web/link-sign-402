@@ -1,32 +1,37 @@
 import { Link } from '@tanstack/react-router'
 import { FileSignature, Home, PenTool } from 'lucide-react'
+import { Button } from './ui/button'
 
 export default function Header() {
   return (
-    <header className="p-4 flex items-center justify-between bg-gray-800 text-white shadow-lg">
-      <Link to="/" className="flex items-center gap-2">
-        <FileSignature size={28} className="text-cyan-400" />
-        <span className="text-xl font-bold">LinkSign</span>
-      </Link>
+    <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between transition-all">
+        <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+          <div className="p-2 rounded-lg bg-primary/10">
+            <FileSignature className="w-5 h-5 text-primary" />
+          </div>
+          <span className="text-xl font-bold tracking-tight">LinkSign</span>
+        </Link>
 
-      <nav className="flex items-center gap-4">
-        <Link
-          to="/"
-          className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors"
-          activeProps={{ className: 'flex items-center gap-2 px-3 py-2 rounded-lg bg-cyan-600' }}
-        >
-          <Home size={18} />
-          <span>Home</span>
-        </Link>
-        <Link
-          to="/create"
-          className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-700 transition-colors"
-          activeProps={{ className: 'flex items-center gap-2 px-3 py-2 rounded-lg bg-cyan-600' }}
-        >
-          <PenTool size={18} />
-          <span>Create</span>
-        </Link>
-      </nav>
+        <nav className="flex items-center gap-2">
+          <Link to="/">
+            {({ isActive }) => (
+              <Button variant={isActive ? 'secondary' : 'ghost'} size="sm" className="gap-2">
+                <Home className="w-4 h-4" />
+                <span>Home</span>
+              </Button>
+            )}
+          </Link>
+          <Link to="/create">
+            {({ isActive }) => (
+              <Button variant={isActive ? 'secondary' : 'ghost'} size="sm" className="gap-2">
+                <PenTool className="w-4 h-4" />
+                <span>Create</span>
+              </Button>
+            )}
+          </Link>
+        </nav>
+      </div>
     </header>
   )
 }

@@ -10,7 +10,7 @@ export default function Header() {
           <div className="p-2 rounded-lg bg-primary/10">
             <FileSignature className="w-5 h-5 text-primary" />
           </div>
-          <span className="text-xl font-bold tracking-tight">LinkSign</span>
+          <span className="text-xl font-bold tracking-tight">LinkSignX402</span>
         </Link>
 
         <nav className="flex items-center gap-2">

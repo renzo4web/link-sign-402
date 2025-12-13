@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { FileSignature, Home, PenTool } from 'lucide-react'
 import { Button } from './ui/button'
+import { WalletConnect } from './WalletConnect'
 
 export default function Header() {
   return (
@@ -30,6 +31,9 @@ export default function Header() {
               </Button>
             )}
           </Link>
+          <div className="ml-2">
+            <WalletConnect />
+          </div>
         </nav>
       </div>
     </header>

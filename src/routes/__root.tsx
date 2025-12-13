@@ -3,6 +3,9 @@ import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import '@rainbow-me/rainbowkit/styles.css'
+import { RainbowKitProvider } from '@rainbow-me/rainbowkit'
+import { useEffect, useState } from 'react'
 
 import Header from '../components/Header'
 import { wagmiConfig } from '../lib/wagmi'
@@ -37,6 +40,12 @@ export const Route = createRootRoute({
 })
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false)
+  
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   return (
     <html lang="en">
       <head>
@@ -45,19 +54,28 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <body>
         <WagmiProvider config={wagmiConfig}>
           <QueryClientProvider client={queryClient}>
-            <Header />
-            {children}
-            <TanStackDevtools
-              config={{
-                position: 'bottom-right',
-              }}
-              plugins={[
-                {
-                  name: 'Tanstack Router',
-                  render: <TanStackRouterDevtoolsPanel />,
-                },
-              ]}
-            />
+            {mounted ? (
+              <RainbowKitProvider>
+                <Header />
+                {children}
+                <TanStackDevtools
+                  config={{
+                    position: 'bottom-right',
+                  }}
+                  plugins={[
+                    {
+                      name: 'Tanstack Router',
+                      render: <TanStackRouterDevtoolsPanel />,
+                    },
+                  ]}
+                />
+              </RainbowKitProvider>
+            ) : (
+              <>
+                <Header />
+                {children}
+              </>
+            )}
           </QueryClientProvider>
         </WagmiProvider>
         <Scripts />

@@ -41,11 +41,28 @@ function createServerConfig() {
       payToAddress: getEnvVar('PAY_TO_ADDRESS', process.env.PAY_TO_ADDRESS),
       network: getEnvVar('BLOCKCHAIN_NETWORK', process.env.BLOCKCHAIN_NETWORK),
       contractAddress: getEnvVar('CONTRACT_ADDRESS', process.env.CONTRACT_ADDRESS),
+      rpcUrl: getEnvVar('BLOCKCHAIN_RPC_URL', process.env.BLOCKCHAIN_RPC_URL),
+      // Optional override for CAIP-2 chainRef (e.g. "eip155:84532").
+      // If omitted, the server will derive it from BLOCKCHAIN_NETWORK.
+      chainRef: process.env.BLOCKCHAIN_CHAIN_REF,
+    },
+
+    // Pinata (Server-side)
+    pinata: {
+      jwt: getEnvVar('PINATA_JWT', process.env.PINATA_JWT),
+      gateway: getEnvVar('PINATA_GATEWAY', process.env.PINATA_GATEWAY),
+    },
+
+    // Server wallet (Server-side)
+    // Used to submit AgreementOracle txs. For MVP we keep this here.
+    wallet: {
+      privateKey: getEnvVar('SERVER_WALLET_PRIVATE_KEY', process.env.SERVER_WALLET_PRIVATE_KEY),
     },
     
     // Payment Configuration (Server-side - source of truth)
     payment: {
-      price: getEnvVar('PAYMENT_PRICE', process.env.PAYMENT_PRICE),
+      createPrice: getEnvVar('PAYMENT_CREATE_PRICE', process.env.PAYMENT_CREATE_PRICE),
+      signPrice: getEnvVar('PAYMENT_SIGN_PRICE', process.env.PAYMENT_SIGN_PRICE),
     },
     
     // Runtime Environment
@@ -59,9 +76,10 @@ function createServerConfig() {
  * Only use VITE_ prefixed variables here
  */
 const clientConfig = {
-  // Payment Display (must match server PAYMENT_PRICE)
+  // Payment Display (must match server PAYMENT_* values)
   payment: {
-    price: getEnvVar('VITE_PAYMENT_PRICE', import.meta.env.VITE_PAYMENT_PRICE),
+    createPrice: getEnvVar('VITE_PAYMENT_CREATE_PRICE', import.meta.env.VITE_PAYMENT_CREATE_PRICE),
+    signPrice: getEnvVar('VITE_PAYMENT_SIGN_PRICE', import.meta.env.VITE_PAYMENT_SIGN_PRICE),
   },
   
   // Blockchain Display
@@ -112,7 +130,7 @@ export type ClientConfig = typeof clientConfig
  * // Client component:
  * function MyComponent() {
  *   const config = getClientConfig()
- *   const price = config.payment.price // ✅ Works - uses VITE_ vars
+ *   const price = config.payment.createPrice // ✅ Works - uses VITE_ vars
  *   
  *   // const serverConfig = getServerConfig() // ❌ Throws error in browser!
  * }

@@ -1,6 +1,5 @@
-import { http, createConfig } from 'wagmi'
+import { getDefaultConfig } from '@rainbow-me/rainbowkit'
 import { baseSepolia, mainnet, sepolia, base } from 'wagmi/chains'
-import { injected, metaMask } from 'wagmi/connectors'
 import { getClientConfig } from '../config/env'
 
 // Get configuration
@@ -9,7 +8,7 @@ const config = getClientConfig()
 // Determine the target chain based on environment variables
 const getTargetChain = () => {
   const networkName = config.blockchain.networkName
-  
+
   switch (networkName.toLowerCase()) {
     case 'base-sepolia':
       return baseSepolia
@@ -26,14 +25,9 @@ const getTargetChain = () => {
 
 const targetChain = getTargetChain()
 
-// @ts-ignore - Ignore TypeScript error for dynamic transports
-export const wagmiConfig = createConfig({
+export const wagmiConfig = getDefaultConfig({
+  appName: 'LinkSignX402',
+  projectId: 'YOUR_PROJECT_ID',
   chains: [targetChain],
-  connectors: [injected(), metaMask()],
-  // Explicitly disable SSR since this app renders client-side only
-  ssr: false,
-  // @ts-ignore - Ignore TypeScript error for dynamic transports
-  transports: {
-    [targetChain.id]: http(),
-  },
+  ssr: false, // Client-side only
 })

@@ -61,9 +61,10 @@ code {
   --color-info-foreground: var(--info-foreground);
   --color-info: var(--info);
   --color-destructive-foreground: var(--destructive-foreground);
+
   @keyframes skeleton {
-  to {
-    background-position: -200% 0;
+    to {
+      background-position: -200% 0;
     }
   }
 }
@@ -76,7 +77,7 @@ code {
   --card-foreground: var(--color-zinc-950);
   --popover: var(--color-white);
   --popover-foreground: var(--color-zinc-950);
-  --primary: var(--color-cyan-600);
+  --primary: var(--color-zinc-900);
   --primary-foreground: var(--color-white);
   --secondary: var(--color-zinc-100);
   --secondary-foreground: var(--color-zinc-900);
@@ -87,7 +88,7 @@ code {
   --destructive: var(--color-red-500);
   --border: var(--color-zinc-200);
   --input: var(--color-zinc-200);
-  --ring: var(--color-cyan-600);
+  --ring: var(--color-zinc-900);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -117,8 +118,8 @@ code {
   --card-foreground: var(--color-zinc-50);
   --popover: var(--color-zinc-950);
   --popover-foreground: var(--color-zinc-50);
-  --primary: var(--color-cyan-500);
-  --primary-foreground: var(--color-white);
+  --primary: var(--color-zinc-50);
+  --primary-foreground: var(--color-zinc-900);
   --secondary: var(--color-zinc-800);
   --secondary-foreground: var(--color-zinc-50);
   --muted: var(--color-zinc-800);
@@ -128,7 +129,7 @@ code {
   --destructive: var(--color-red-900);
   --border: var(--color-zinc-800);
   --input: var(--color-zinc-800);
-  --ring: var(--color-cyan-600);
+  --ring: var(--color-zinc-50);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -155,6 +156,7 @@ code {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }

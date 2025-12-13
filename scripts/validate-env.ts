@@ -65,14 +65,20 @@ const requiredServerVars = [
   'CDP_API_KEY_ID',
   'CDP_API_KEY_SECRET',
   'PAY_TO_ADDRESS',
-  'PAYMENT_PRICE',
+  'PAYMENT_CREATE_PRICE',
+  'PAYMENT_SIGN_PRICE',
   'BLOCKCHAIN_NETWORK',
   'CONTRACT_ADDRESS',
+  'BLOCKCHAIN_RPC_URL',
+  'PINATA_JWT',
+  'PINATA_GATEWAY',
+  'SERVER_WALLET_PRIVATE_KEY',
 ] as const
 
 // Required client-side environment variables
 const requiredClientVars = [
-  'VITE_PAYMENT_PRICE',
+  'VITE_PAYMENT_CREATE_PRICE',
+  'VITE_PAYMENT_SIGN_PRICE',
   'VITE_BLOCKCHAIN_NETWORK',
 ] as const
 
@@ -102,20 +108,34 @@ for (const key of requiredClientVars) {
   }
 }
 
-// Cross-validate PAYMENT_PRICE vs VITE_PAYMENT_PRICE
+// Cross-validate PAYMENT_* vs VITE_PAYMENT_*
 logInfo('Cross-validating payment prices...')
-const serverPrice = process.env.PAYMENT_PRICE
-const clientPrice = process.env.VITE_PAYMENT_PRICE
+const serverCreatePrice = process.env.PAYMENT_CREATE_PRICE
+const clientCreatePrice = process.env.VITE_PAYMENT_CREATE_PRICE
+const serverSignPrice = process.env.PAYMENT_SIGN_PRICE
+const clientSignPrice = process.env.VITE_PAYMENT_SIGN_PRICE
 
-if (serverPrice && clientPrice) {
-  if (serverPrice !== clientPrice) {
-    logError(`Price mismatch detected!`)
-    console.log(`  Server (PAYMENT_PRICE):      ${serverPrice}`)
-    console.log(`  Client (VITE_PAYMENT_PRICE): ${clientPrice}`)
+if (serverCreatePrice && clientCreatePrice) {
+  if (serverCreatePrice !== clientCreatePrice) {
+    logError('Create price mismatch detected!')
+    console.log(`  Server (PAYMENT_CREATE_PRICE):      ${serverCreatePrice}`)
+    console.log(`  Client (VITE_PAYMENT_CREATE_PRICE): ${clientCreatePrice}`)
     logWarning('These should match to avoid confusion. Server price is the source of truth.')
     hasErrors = true
   } else {
-    logSuccess('Payment prices match')
+    logSuccess('Create prices match')
+  }
+}
+
+if (serverSignPrice && clientSignPrice) {
+  if (serverSignPrice !== clientSignPrice) {
+    logError('Sign price mismatch detected!')
+    console.log(`  Server (PAYMENT_SIGN_PRICE):      ${serverSignPrice}`)
+    console.log(`  Client (VITE_PAYMENT_SIGN_PRICE): ${clientSignPrice}`)
+    logWarning('These should match to avoid confusion. Server price is the source of truth.')
+    hasErrors = true
+  } else {
+    logSuccess('Sign prices match')
   }
 }
 

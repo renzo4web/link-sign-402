@@ -25,6 +25,12 @@ const config = defineConfig({
       crypto: path.resolve(__dirname, 'src/lib/crypto-shim.ts'),
     },
   },
+  test: {
+    // Run unit tests in a Node-compatible runtime.
+    // The Cloudflare Workers runner does not support CommonJS globals like `module`.
+    pool: 'threads',
+    environment: 'jsdom',
+  },
 })
 
 export default config

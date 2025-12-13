@@ -30,10 +30,11 @@ function getEnvVar(key: string, value: string | undefined): string {
  */
 function createServerConfig() {
   return {
-    // Coinbase CDP API Keys (SECRETS)
+    // Coinbase CDP API Keys (OPTIONAL - for CDP facilitator)
+    // If not set, falls back to x402.org/facilitator (testnet only)
     cdp: {
-      apiKeyId: getEnvVar('CDP_API_KEY_ID', process.env.CDP_API_KEY_ID),
-      apiKeySecret: getEnvVar('CDP_API_KEY_SECRET', process.env.CDP_API_KEY_SECRET),
+      apiKeyId: process.env.CDP_API_KEY_ID || '',
+      apiKeySecret: process.env.CDP_API_KEY_SECRET || '',
     },
     
     // Blockchain Configuration (Server-side)

@@ -1,15 +1,14 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { FileSignature, Shield, Wallet, ArrowRight, Zap, Globe, Lock } from 'lucide-react'
+import { FileSignature, Shield, Wallet, ArrowRight, Zap, Globe, Lock, Database, Eye, Infinity, CheckCircle2 } from 'lucide-react'
 import { Button } from '../components/ui/button'
-import { cn } from '../lib/utils'
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '../components/ui/card'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../components/ui/accordion'
+import { Alert, AlertTitle, AlertDescription } from '../components/ui/alert'
 import { getClientConfig } from '../config/env'
 
 export const Route = createFileRoute('/')({ component: Home })
@@ -18,105 +17,82 @@ function Home() {
   const config = getClientConfig()
 
   return (
-    <div className="min-h-screen text-foreground overflow-hidden relative bg-white dark:bg-black">
-      {/* Grid Background */}
-      <div className={cn(
-          "absolute inset-0",
-          "[background-size:40px_40px]",
-          "[background-image:linear-gradient(to_right,#e4e4e7_1px,transparent_1px),linear-gradient(to_bottom,#e4e4e7_1px,transparent_1px)]",
-          "dark:[background-image:linear-gradient(to_right,#262626_1px,transparent_1px),linear-gradient(to_bottom,#262626_1px,transparent_1px)]",
-        )}
-      />
-      {/* Radial gradient mask for faded look */}
-      <div className="pointer-events-none absolute inset-0 bg-white [mask-image:radial-gradient(ellipse_at_center,transparent_20%,black)] dark:bg-black" />
+    <div className="min-h-screen text-foreground overflow-hidden relative bg-background">
       
       {/* Content Layer */}
-      <div className="relative z-10">
+      <div className="relative">
         {/* Hero Section */}
-        <section className="relative pt-24 pb-16 md:pt-40 md:pb-24 px-6">
+        <section className="relative pt-24 pb-24 px-6 text-center">
           <div className="relative z-10 max-w-5xl mx-auto">
-            <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-[1.1] text-slate-900 dark:text-slate-50">
+            <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-[1.1] text-foreground">
               Sign Agreements with{' '}
-              <span className="text-blue-600">x402 Protocol</span>
+              <span className="underline decoration-2 underline-offset-4">x402 Protocol</span>
             </h1>
 
-            <p className="mt-6 text-lg md:text-xl text-slate-600 dark:text-slate-400 max-w-xl leading-relaxed">
+            <p className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
               The digital handshake for the crypto era.<br />
               Create immutable, verifiable agreements without the paperwork.
             </p>
 
-            <div className="flex flex-wrap items-center gap-3 mt-8">
+            <div className="flex flex-wrap items-center justify-center gap-3 mt-8">
               <Link to="/create">
-                <Button size="lg" className="h-11 px-6 rounded-full bg-slate-900 text-white hover:bg-slate-800">
+                <Button size="lg">
                   Get Started
                   <ArrowRight className="ml-2 w-4 h-4" />
                 </Button>
               </Link>
               <a href="https://github.com/turbopila/link-sign-402" target="_blank" rel="noopener noreferrer">
-                <Button size="lg" variant="outline" className="h-11 px-6 rounded-full">
+                <Button size="lg" variant="outline">
                   View on GitHub
                 </Button>
               </a>
             </div>
 
-            <p className="mt-6 text-sm text-slate-500">
+            <p className="mt-6 text-sm text-muted-foreground">
               Live on Base Sepolia
             </p>
           </div>
         </section>
 
         {/* Features Grid */}
-        <section className="py-20 px-6">
-          <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
-            <Card className="bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm border-slate-200 dark:border-slate-800 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-blue-200">
-              <CardHeader>
-                <div className="h-12 w-12 rounded-lg bg-blue-50 flex items-center justify-center mb-4">
-                  <Wallet className="w-6 h-6 text-blue-600" />
-                </div>
-                <CardTitle className="text-xl">Zero Friction Setup</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription className="text-base leading-relaxed">
-                  No emails, no passwords, no sign-ups. Just connect your wallet and you're ready to sign. 
-                  A pure Web3 native experience.
-                </CardDescription>
-              </CardContent>
-            </Card>
+        <section className="py-16 px-6 bg-muted/50">
+          <div className="max-w-5xl mx-auto grid md:grid-cols-3 gap-8 text-center">
+            <div className="flex flex-col items-center p-6 rounded-2xl border bg-card shadow-sm hover:shadow-md transition-all duration-300">
+              <div className="h-14 w-14 rounded-xl border border-border/50 flex items-center justify-center mb-5 bg-background/50 backdrop-blur-sm">
+                <Wallet className="w-7 h-7 text-foreground" />
+              </div>
+              <h3 className="text-xl font-bold mb-3">Zero Friction Setup</h3>
+              <p className="text-muted-foreground leading-relaxed text-sm md:text-base">
+                No emails, no passwords, no sign-ups. Just connect your wallet and you're ready to sign.
+              </p>
+            </div>
 
-            <Card className="bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm border-slate-200 dark:border-slate-800 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-blue-200">
-              <CardHeader>
-                <div className="h-12 w-12 rounded-lg bg-blue-50 flex items-center justify-center mb-4">
-                  <Zap className="w-6 h-6 text-blue-600" />
-                </div>
-                <CardTitle className="text-xl">Instant Micropayments</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription className="text-base leading-relaxed">
-                  Powered by the x402 protocol. Create binding agreements for just {config.payment.price} USDC. 
-                  Fast, cheap, and reliable global payments.
-                </CardDescription>
-              </CardContent>
-            </Card>
+            <div className="flex flex-col items-center p-6 rounded-2xl border bg-card shadow-sm hover:shadow-md transition-all duration-300">
+              <div className="h-14 w-14 rounded-xl border border-border/50 flex items-center justify-center mb-5 bg-background/50 backdrop-blur-sm">
+                <Zap className="w-7 h-7 text-foreground" />
+              </div>
+              <h3 className="text-xl font-bold mb-3">Instant Micropayments</h3>
+              <p className="text-muted-foreground leading-relaxed text-sm md:text-base">
+                Powered by x402. Create binding agreements for just {config.payment.createPrice} USDC. 
+                Fast, cheap, and reliable.
+              </p>
+            </div>
 
-            <Card className="bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm border-slate-200 dark:border-slate-800 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-blue-200">
-              <CardHeader>
-                <div className="h-12 w-12 rounded-lg bg-blue-50 flex items-center justify-center mb-4">
-                  <FileSignature className="w-6 h-6 text-blue-600" />
-                </div>
-                <CardTitle className="text-xl">Immutable Proof</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription className="text-base leading-relaxed">
-                  Every signature is cryptographically verified and stored on-chain. 
-                  Create a permanent, tamper-proof record of your agreements.
-                </CardDescription>
-              </CardContent>
-            </Card>
+            <div className="flex flex-col items-center p-6 rounded-2xl border bg-card shadow-sm hover:shadow-md transition-all duration-300">
+              <div className="h-14 w-14 rounded-xl border border-border/50 flex items-center justify-center mb-5 bg-background/50 backdrop-blur-sm">
+                <FileSignature className="w-7 h-7 text-foreground" />
+              </div>
+              <h3 className="text-xl font-bold mb-3">Immutable Proof</h3>
+              <p className="text-muted-foreground leading-relaxed text-sm md:text-base">
+                Every signature is cryptographically verified and stored on-chain. 
+                A permanent, tamper-proof record.
+              </p>
+            </div>
           </div>
         </section>
 
         {/* How It Works / Details */}
-        <section className="py-24 px-6 max-w-5xl mx-auto">
+        <section className="py-16 px-6 max-w-5xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-4">Why LinkSign?</h2>
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
@@ -124,11 +100,11 @@ function Home() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-12 items-start">
+          <div className="space-y-12">
             <div className="space-y-8">
               <div className="flex gap-4">
-                <div className="mt-1 bg-blue-50 p-2 rounded-full h-fit">
-                   <Globe className="w-6 h-6 text-blue-600" />
+                <div className="mt-1 bg-secondary p-2 rounded-full h-fit">
+                   <Globe className="w-6 h-6 text-foreground" />
                 </div>
                 <div>
                   <h3 className="text-xl font-semibold mb-2">Global & Permissionless</h3>
@@ -140,8 +116,8 @@ function Home() {
               </div>
 
                <div className="flex gap-4">
-                <div className="mt-1 bg-blue-50 p-2 rounded-full h-fit">
-                   <Lock className="w-6 h-6 text-blue-600" />
+                <div className="mt-1 bg-secondary p-2 rounded-full h-fit">
+                   <Lock className="w-6 h-6 text-foreground" />
                 </div>
                 <div>
                   <h3 className="text-xl font-semibold mb-2">Cryptographically Secure</h3>
@@ -153,8 +129,8 @@ function Home() {
               </div>
 
                <div className="flex gap-4">
-                <div className="mt-1 bg-blue-50 p-2 rounded-full h-fit">
-                   <Shield className="w-6 h-6 text-blue-600" />
+                <div className="mt-1 bg-secondary p-2 rounded-full h-fit">
+                   <Shield className="w-6 h-6 text-foreground" />
                 </div>
                 <div>
                   <h3 className="text-xl font-semibold mb-2">Transparent History</h3>
@@ -166,7 +142,7 @@ function Home() {
               </div>
             </div>
 
-            <Card className="border-muted/50 shadow-none bg-muted/20">
+            <Card>
               <CardHeader>
                 <CardTitle>Common Questions</CardTitle>
               </CardHeader>
@@ -193,18 +169,92 @@ function Home() {
                       We value your privacy and data ownership.
                     </AccordionContent>
                   </AccordionItem>
+                  <AccordionItem value="item-4">
+                    <AccordionTrigger>What happens if LinkSign disappears?</AccordionTrigger>
+                    <AccordionContent className="text-muted-foreground">
+                      Your agreements are safe. Documents are stored on IPFS, and all proofs (signatures, timestamps, hashes) 
+                      are permanently recorded on Ethereum. You can verify everything using only public blockchain data and 
+                      standard tools - no dependency on us.
+                    </AccordionContent>
+                  </AccordionItem>
+                  <AccordionItem value="item-5">
+                    <AccordionTrigger>How can I verify my agreement independently?</AccordionTrigger>
+                    <AccordionContent className="text-muted-foreground">
+                      Anyone can verify: (1) Read the AgreementCreated event from the blockchain, (2) Download the document 
+                      from IPFS using the CID, (3) Hash the file with keccak256 and compare with the on-chain docHash, 
+                      (4) Check payment transaction exists on the block explorer. All verification is public and trustless.
+                    </AccordionContent>
+                  </AccordionItem>
                 </Accordion>
               </CardContent>
             </Card>
           </div>
         </section>
 
+        {/* Built to Last - Trust Section */}
+        <section className="py-16 px-6 bg-muted/50">
+          <div className="max-w-5xl mx-auto space-y-12">
+            <div className="max-w-2xl mx-auto">
+              <Alert variant="success" className="bg-background border-foreground/20 text-foreground">
+                <CheckCircle2 className="w-4 h-4" />
+                <AlertTitle>Your Agreements Survive Forever</AlertTitle>
+                <AlertDescription>
+                  Even if LinkSign shuts down, your documents and signatures remain permanently accessible on IPFS and Ethereum.
+                </AlertDescription>
+              </Alert>
+            </div>
+
+            <div className="text-center max-w-2xl mx-auto">
+              <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-4">Built to Last</h2>
+              <p className="text-muted-foreground text-lg">
+                True decentralization means your data outlives any single service.
+              </p>
+            </div>
+
+            <div className="max-w-5xl mx-auto grid md:grid-cols-3 gap-8 text-center">
+              <div className="flex flex-col items-center p-6 rounded-2xl border bg-card shadow-sm hover:shadow-md transition-all duration-300">
+                <div className="h-14 w-14 rounded-xl border border-border/50 flex items-center justify-center mb-5 mx-auto bg-background/50 backdrop-blur-sm">
+                  <Database className="w-7 h-7 text-foreground" />
+                </div>
+                <h3 className="text-xl font-bold mb-3">No Database, No Risk</h3>
+                <p className="text-muted-foreground leading-relaxed text-sm md:text-base">
+                  All data is stored on IPFS and the blockchain. We don't hold your documents in a 
+                  private database.
+                </p>
+              </div>
+
+              <div className="flex flex-col items-center p-6 rounded-2xl border bg-card shadow-sm hover:shadow-md transition-all duration-300">
+                <div className="h-14 w-14 rounded-xl border border-border/50 flex items-center justify-center mb-5 mx-auto bg-background/50 backdrop-blur-sm">
+                  <Eye className="w-7 h-7 text-foreground" />
+                </div>
+                <h3 className="text-xl font-bold mb-3">Anyone Can Verify</h3>
+                <p className="text-muted-foreground leading-relaxed text-sm md:text-base">
+                  No trust required. Any developer can independently verify signatures using only public 
+                  blockchain data and IPFS.
+                </p>
+              </div>
+
+              <div className="flex flex-col items-center p-6 rounded-2xl border bg-card shadow-sm hover:shadow-md transition-all duration-300">
+                <div className="h-14 w-14 rounded-xl border border-border/50 flex items-center justify-center mb-5 mx-auto bg-background/50 backdrop-blur-sm">
+                  <Infinity className="w-7 h-7 text-foreground" />
+                </div>
+                <h3 className="text-xl font-bold mb-3">Permanent Storage</h3>
+                <p className="text-muted-foreground leading-relaxed text-sm md:text-base">
+                  Documents are pinned to IPFS. Cryptographic proofs are etched 
+                  into Ethereum forever.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Footer CTA */}
-        <section className="py-20 px-6 text-center bg-gradient-to-b from-transparent to-primary/5">
+        <section className="py-20 px-6 text-center">
           <h2 className="text-3xl font-bold mb-6">Ready to verify your next deal?</h2>
           <Link to="/create">
-            <Button size="lg" variant="default" className="text-lg px-8 rounded-full h-12 shadow-xl hover:shadow-2xl transition-all hover:scale-105">
+            <Button size="lg">
               Create Agreement Now
+              <ArrowRight className="ml-2 w-4 h-4" />
             </Button>
           </Link>
         </section>

@@ -30,7 +30,7 @@ function PaymentButton() {
   
   return (
     <button>
-      Pay {config.payment.price} on {config.blockchain.networkName}
+      Pay {config.payment.createPrice} on {config.blockchain.networkName}
     </button>
   )
 }
@@ -52,7 +52,7 @@ export const processPayment = createServerFn()
     
     // Configuración de blockchain
     const payTo = config.blockchain.payToAddress
-    const price = config.payment.price
+    const price = config.payment.createPrice
     
     // ... lógica de pago
   })

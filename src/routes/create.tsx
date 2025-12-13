@@ -68,6 +68,7 @@ type CreateAgreementResponse = {
   paymentRef: string
   chainRef: string
   txHash: string | null
+  confirmed?: boolean
   link: string
   alreadyExisted?: boolean
 }
@@ -159,6 +160,7 @@ function SuccessSummary({
   const ipfsUrl = buildIpfsHttpUrl(data.cid)
   const txUrl = buildTxUrl(data.chainRef, data.txHash)
   const creatorUrl = buildAddressUrl(data.chainRef, data.creator)
+  const isConfirmed = Boolean(data.confirmed)
 
   function DetailRow(props: {
     title: string
@@ -207,9 +209,13 @@ function SuccessSummary({
               <Badge variant="info" size="sm">
                 Already existed
               </Badge>
-            ) : (
+            ) : isConfirmed ? (
               <Badge variant="success" size="sm">
                 Confirmed
+              </Badge>
+            ) : (
+              <Badge variant="warning" size="sm">
+                Pending
               </Badge>
             )}
             <Badge variant="outline" size="sm">
@@ -230,6 +236,7 @@ function SuccessSummary({
               You can open the agreement above to review it.
             </AlertDescription>
           </Alert>
+
         ) : null}
 
         <div className="grid gap-2 sm:grid-cols-3">
@@ -334,8 +341,12 @@ function SuccessSummary({
             title="Transaction"
             description={
               data.txHash
-                ? 'The on-chain transaction that registered this agreement. Verify it on the block explorer.'
-                : 'Not available. This can happen if the request was retried and the agreement already existed.'
+                ? (isConfirmed
+                    ? 'The on-chain transaction that registered this agreement. Verify it on the block explorer.'
+                    : 'The registration transaction was submitted and may take a moment to confirm on-chain. Verify it on the block explorer.')
+                : data.alreadyExisted
+                  ? 'Not available. This can happen if the request was retried and the agreement already existed.'
+                  : 'Not available.'
             }
             value={
               data.txHash ?? (

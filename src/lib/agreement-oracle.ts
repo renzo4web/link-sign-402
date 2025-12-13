@@ -5,7 +5,7 @@ import {
   createPublicClient,
   createWalletClient,
   encodeAbiParameters,
-  getContract,
+  encodeFunctionData,
   http,
   isAddress,
   keccak256,
@@ -125,35 +125,78 @@ export async function registerAgreement(
     creator: Address
     paymentRef: Hash
     chainRef: string
+    /** If true, wait for the transaction to be mined before returning */
+    waitForConfirmation?: boolean
   }
-): Promise<{ txHash: Hash }>
+): Promise<{ txHash: Hash; rpcAccepted: boolean; confirmed: boolean }>
 {
   const chain = chainForNetwork(params.network)
   const account = privateKeyToAccount(params.serverPrivateKey)
 
-  const publicClient = createPublicClient({ chain, transport: http(params.rpcUrl) })
-  const walletClient = createWalletClient({ chain, transport: http(params.rpcUrl), account })
+  // Cast `chain` to avoid TS generic conflicts across unioned chain configs.
+  const publicClient = createPublicClient({ chain: chain as any, transport: http(params.rpcUrl) })
+  const walletClient = createWalletClient({ chain: chain as any, transport: http(params.rpcUrl), account })
 
-  const contract = getContract({
+  const args = [
+    params.agreementId,
+    params.docHash,
+    params.cid,
+    params.creator,
+    params.paymentRef,
+    params.chainRef,
+  ] as const
+
+  // dry-run for better errors (reverts, bad params, etc.)
+  await publicClient.simulateContract({
     address: params.contractAddress,
     abi: agreementOracleAbi,
-    client: { public: publicClient, wallet: walletClient },
+    functionName: 'registerAgreement',
+    args,
+    account,
   })
 
-  const txHash = await contract.write.registerAgreement(
-    [
-      params.agreementId,
-      params.docHash,
-      params.cid,
-      params.creator,
-      params.paymentRef,
-      params.chainRef,
-    ],
-    {
-      account,
-      chain,
-    }
-  )
+  const data = encodeFunctionData({
+    abi: agreementOracleAbi,
+    functionName: 'registerAgreement',
+    args,
+  })
 
-  return { txHash }
+  const prepared = await walletClient.prepareTransactionRequest({
+    to: params.contractAddress,
+    data,
+    chain: chain as any,
+    account,
+  })
+
+  const serializedTransaction = await walletClient.signTransaction({
+    ...(prepared as any),
+    chain: chain as any,
+    account,
+  })
+  const txHash = keccak256(serializedTransaction) as Hash
+
+  try {
+    await walletClient.sendRawTransaction({ serializedTransaction })
+
+    // Optionally wait for transaction to be mined
+    if (params.waitForConfirmation) {
+      await publicClient.waitForTransactionReceipt({ hash: txHash, confirmations: 1 })
+      return { txHash, rpcAccepted: true, confirmed: true }
+    }
+
+    return { txHash, rpcAccepted: true, confirmed: false }
+  } catch (error: any) {
+    const errorMessage = error?.cause?.reason || error?.message || ''
+    if (errorMessage.includes('already known')) {
+      // Node already has this signed tx in its mempool; return the computed hash so
+      // the client can track it on the explorer.
+      // If waiting for confirmation was requested, wait for it even on "already known"
+      if (params.waitForConfirmation) {
+        await publicClient.waitForTransactionReceipt({ hash: txHash, confirmations: 1 })
+        return { txHash, rpcAccepted: false, confirmed: true }
+      }
+      return { txHash, rpcAccepted: false, confirmed: false }
+    }
+    throw error
+  }
 }

@@ -42,16 +42,18 @@ type AppVariables = {
   requestId: string  // Unique ID for logging/debugging each request
 }
 
+type LogFn = (message: string, ...rest: string[]) => void
+
+// Custom logger for consistent logging across the app
+export const customLogger: LogFn = (message: string, ...rest: string[]) => {
+  console.log(message, ...rest)
+}
+
 const app = new Hono<{ Variables: AppVariables }>()
 
 // ===== SERVER CONFIGURATION =====
 // Load environment variables (PAY_TO_ADDRESS, BLOCKCHAIN_NETWORK, etc.)
 const config = getServerConfig()
-const isDev = config.nodeEnv !== 'production'
-// Set `X402_DEBUG=true` to enable verbose (dev-only) x402 logs.
-const x402Debug = isDev && process.env.X402_DEBUG === 'true'
-
-// Address where payments will be sent (your wallet)
 const payTo = config.blockchain.payToAddress as `0x${string}`
 
 // ===== CAIP-2 NETWORK IDENTIFIERS =====
@@ -103,52 +105,22 @@ const resourceServer = new x402ResourceServer(facilitatorClient)
 
 resourceServer
   .onVerifyFailure(async ({ requirements, error }) => {
-    const message = error instanceof Error ? error.message : String(error)
-    console.error('[x402] verify failed', {
-      network: requirements.network,
-      scheme: requirements.scheme,
-      amount: requirements.amount,
-      asset: requirements.asset,
-      message,
-    })
+    const msg = error instanceof Error ? error.message : String(error)
+    customLogger(`[x402] verify failed: ${msg} (${requirements.scheme}@${requirements.network})`)
   })
   .onSettleFailure(async ({ requirements, error }) => {
-    const message = error instanceof Error ? error.message : String(error)
-    console.error('[x402] settle failed', {
-      network: requirements.network,
-      scheme: requirements.scheme,
-      amount: requirements.amount,
-      asset: requirements.asset,
-      message,
-    })
+    const msg = error instanceof Error ? error.message : String(error)
+    customLogger(`[x402] settle failed: ${msg} (${requirements.scheme}@${requirements.network})`)
+  })
+  .onAfterVerify(async ({ result }) => {
+    customLogger(`[x402] verify: ${result.isValid ? '✓' : '✗'}`)
+  })
+  .onAfterSettle(async ({ result }) => {
+    const tx = (result as any)?.transaction || 'N/A'
+    customLogger(`[x402] settle: ${result.success ? '✓' : '✗'} tx=${tx}`)
   })
 
-if (x402Debug) {
-  resourceServer
-    .onAfterVerify(async ({ result, requirements }) => {
-      console.log('[x402] verify ok', {
-        network: requirements.network,
-        scheme: requirements.scheme,
-        amount: requirements.amount,
-        asset: requirements.asset,
-        isValid: result.isValid,
-      })
-    })
-    .onAfterSettle(async ({ result, requirements }) => {
-      console.log('[x402] settle ok', {
-        network: requirements.network,
-        scheme: requirements.scheme,
-        amount: requirements.amount,
-        asset: requirements.asset,
-        success: result.success,
-        transaction: (result as any)?.transaction,
-      })
-    })
-}
-
-console.log('[x402] Network:', networkCaip2)
-console.log('[x402] Facilitator:', facilitatorUrl)
-console.log('[x402] PayTo:', payTo)
+customLogger(`[x402] Init: ${networkCaip2} → ${payTo}`)
 
 // ===== X402 INITIALIZATION (PREVENT "HANGING" FIRST REQUEST) =====
 // The official @x402/hono middleware initializes lazily on the first protected request.
@@ -176,28 +148,19 @@ async function ensureX402Initialized(): Promise<void> {
   if (x402InitPromise) return x402InitPromise
 
   x402InitPromise = (async () => {
-    if (x402Debug) {
-      console.log('[x402] initializing facilitator support…')
-    }
+    customLogger('[x402] initializing facilitator…')
 
     await withTimeout(resourceServer.initialize(), x402InitTimeoutMs, 'resourceServer.initialize()')
 
-    // Fail fast if the facilitator doesn't support the configured network/scheme.
     const supportedKind = resourceServer.getSupportedKind(2, networkCaip2, 'exact')
     if (!supportedKind) {
       throw new Error(`Facilitator does not support "exact" on "${networkCaip2}" (x402 v2).`)
     }
 
-    if (x402Debug) {
-      console.log('[x402] facilitator support ok', {
-        network: supportedKind.network,
-        scheme: supportedKind.scheme,
-        x402Version: supportedKind.x402Version,
-      })
-    }
+    customLogger(`[x402] ready: v${supportedKind.x402Version} ${supportedKind.scheme}@${supportedKind.network}`)
   })().catch((error) => {
-    const message = error instanceof Error ? error.message : String(error)
-    console.error('[x402] initialization failed', { message })
+    const msg = error instanceof Error ? error.message : String(error)
+    customLogger(`[x402] init failed: ${msg}`)
     x402InitPromise = null
     throw error
   })
@@ -225,7 +188,7 @@ app.use('*', async (c, next) => {
 })
 
 // 2. Logger
-app.use('*', logger())
+app.use('*', logger(customLogger))
 
 function isX402ProtectedRequest(method: string, path: string): boolean {
   return method.toUpperCase() === 'POST' && path === '/api/create'
@@ -281,21 +244,11 @@ app.use(
 // Ensure errors become responses (avoids "hanging" requests)
 app.onError((error, c) => {
   const requestId = c.get('requestId')
-  console.error('[server][onError]', { requestId, path: c.req.path, error })
+  const msg = error instanceof Error ? error.message : String(error)
+  customLogger(`[error] ${c.req.method} ${c.req.path} - ${msg} (${requestId})`)
 
   if (c.req.path.startsWith('/api/')) {
-    const message =
-      config.nodeEnv === 'production'
-        ? 'Internal Server Error'
-        : (error instanceof Error ? error.message : 'Internal Server Error')
-
-    return c.json(
-      {
-        error: message,
-        requestId,
-      },
-      500,
-    )
+    return c.json({ error: msg, requestId }, 500)
   }
 
   return c.text('Internal Server Error', 500)
@@ -343,18 +296,18 @@ app.post('/api/create', async (c) => {
   }
 
   try {
-    // Validate creator is a valid Ethereum address (0x + 40 hex chars)
     assertEvmAddress(creatorAddress, 'creatorAddress')
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Invalid creatorAddress'
-    return c.json({ error: message, requestId }, 400)
+    const msg = error instanceof Error ? error.message : 'Invalid creatorAddress'
+    return c.json({ error: msg, requestId }, 400)
   }
 
-  // Convert base64 to bytes
   const fileBytes = base64ToBytes(fileBase64)
   if (fileBytes.length === 0) {
     return c.json({ error: 'Empty file', requestId }, 400)
   }
+
+  customLogger(`[create] start: ${fileName} (${fileBytes.length}b) by ${creatorAddress.slice(0, 6)}… (${requestId})`)
 
   // STEP 1: Compute document hash (unique fingerprint of the PDF content)
   const docHash = keccak256(fileBytes) as Hash
@@ -371,15 +324,17 @@ app.post('/api/create', async (c) => {
   try {
     upload = await pinata.upload.public.file(pdfFile)
   } catch (error) {
-    console.error('[api/create] pinata upload failed', { requestId, error })
+    const msg = error instanceof Error ? error.message : String(error)
+    customLogger(`[create] pinata failed: ${msg} (${requestId})`)
     return c.json({ error: 'Failed to upload file to IPFS', requestId }, 502)
   }
 
   const cid = (upload as any)?.cid ?? (upload as any)?.IpfsHash ?? (upload as any)?.ipfsHash
   if (!cid || typeof cid !== 'string') {
-    console.error('[api/create] pinata upload missing cid', { requestId })
+    customLogger(`[create] pinata: no CID (${requestId})`)
     return c.json({ error: 'Pinata upload did not return a CID', requestId }, 502)
   }
+  customLogger(`[create] ipfs: ${cid}`)
 
   // STEP 3: Extract payment reference from x402 header
   // The x402 middleware has already verified the payment signature before
@@ -402,6 +357,7 @@ app.post('/api/create', async (c) => {
 
   // STEP 4: Compute unique agreementId = hash(docHash + creator + paymentRef)
   const agreementId = computeAgreementId(docHash, creatorAddress as Address, paymentRef)
+  customLogger(`[create] agreementId: ${agreementId}`)
 
   // STEP 5: Idempotency check (x402 client retries can repeat the same payment)
   const alreadyExists = await checkAgreementExists({
@@ -413,6 +369,7 @@ app.post('/api/create', async (c) => {
 
   if (alreadyExists) {
     const link = `https://linksignx402.xyz/a/${agreementId}`
+    customLogger(`[create] ✓ already exists (${requestId})`)
     return c.json({
       agreementId,
       docHash,
@@ -426,51 +383,41 @@ app.post('/api/create', async (c) => {
     })
   }
 
-  // STEP 6: Register agreement on-chain
-  // This is a write tx paid by the server wallet.
-  try {
-    const contractTx = await registerAgreement({
-      rpcUrl: config.blockchain.rpcUrl,
-      network: config.blockchain.network,
-      contractAddress: config.blockchain.contractAddress as Address,
-      serverPrivateKey: config.wallet.privateKey as `0x${string}`,
-      agreementId,
-      docHash,
-      cid,
-      creator: creatorAddress as Address,
-      paymentRef,
-      chainRef,
-    })
+	  // STEP 6: Register agreement on-chain
+	  try {
+	    customLogger(`[create] registering on-chain…`)
+	    const contractTx = await registerAgreement({
+	      rpcUrl: config.blockchain.rpcUrl,
+	      network: config.blockchain.network,
+	      contractAddress: config.blockchain.contractAddress as Address,
+	      serverPrivateKey: config.wallet.privateKey as `0x${string}`,
+	      agreementId,
+	      docHash,
+	      cid,
+	      creator: creatorAddress as Address,
+	      paymentRef,
+	      chainRef,
+	      waitForConfirmation: true, // Wait for tx to be mined before responding
+	    })
 
-    const link = `https://linksignx402.xyz/a/${agreementId}`
-    return c.json({
-      agreementId,
-      docHash,
-      cid,
-      creator: creatorAddress,
-      paymentRef,
-      chainRef,
-      txHash: contractTx.txHash,
-      link,
-    })
+	    customLogger(`[create] ✓ registered: ${contractTx.txHash} confirmed=${contractTx.confirmed} (${requestId})`)
+
+	    const link = `https://linksignx402.xyz/a/${agreementId}`
+	    return c.json({
+	      agreementId,
+	      docHash,
+	      cid,
+	      creator: creatorAddress,
+	      paymentRef,
+	      chainRef,
+	      txHash: contractTx.txHash,
+	      // Now we always wait for confirmation, so confirmed should be true
+	      confirmed: contractTx.confirmed,
+	      link,
+	    })
   } catch (contractError: any) {
-    // If we lost the response after broadcasting, the tx can already be known.
     const errorMessage = contractError?.cause?.reason || contractError?.message || ''
-    if (errorMessage.includes('already known')) {
-      const link = `https://linksignx402.xyz/a/${agreementId}`
-      return c.json({
-        agreementId,
-        docHash,
-        cid,
-        creator: creatorAddress,
-        paymentRef,
-        chainRef,
-        txHash: null,
-        link,
-        alreadyExisted: true,
-      })
-    }
-
+    customLogger(`[create] register failed: ${errorMessage} (${requestId})`)
     throw contractError
   }
 })

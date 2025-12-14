@@ -1,13 +1,58 @@
-Welcome to your new TanStack app! 
+# LinkSignX402
 
-# Getting Started
+A trustless digital agreement protocol where users upload documents, pay via x402, and receive immutable proof of existence and signatures on blockchain.
 
-To run this application:
+## Getting Started
+
+### Prerequisites
+
+1. **WalletConnect Project ID** (Required)
+   - Go to https://cloud.reown.com
+   - Create a new project
+   - Copy the Project ID
+   - **Add your domain to the Allowlist** in the dashboard settings:
+     - For local dev: `http://localhost:3000`
+     - For production: `https://your-domain.workers.dev`
+
+2. **Environment Variables**
+   - Copy `.env.example` to `.env`
+   - Fill in all required values (see Configuration section below)
+
+### Installation
 
 ```bash
 pnpm install
-pnpm start
 ```
+
+### Development
+
+```bash
+pnpm dev
+```
+
+### Configuration
+
+All environment variables are documented in [`.env.example`](.env.example). Key variables:
+
+**WalletConnect (Required for wallet connections):**
+```bash
+VITE_WALLETCONNECT_PROJECT_ID="your-project-id-from-cloud.reown.com"
+```
+
+**Blockchain:**
+```bash
+BLOCKCHAIN_NETWORK="base-sepolia"
+CONTRACT_ADDRESS="0x..."
+PAY_TO_ADDRESS="0x..."
+```
+
+**Pinata (for IPFS):**
+```bash
+PINATA_JWT="your-jwt"
+PINATA_GATEWAY="your-gateway.mypinata.cloud"
+```
+
+See [`.env.example`](.env.example) for complete list and descriptions
 
 # Building For Production
 

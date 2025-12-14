@@ -1,24 +1,7 @@
-// Polyfills must be imported first
 import '../lib/polyfills'
 
 import { createFileRoute } from '@tanstack/react-router'
-import { useEffect, useState, useRef } from 'react'
-import {
-  useAccount,
-  useChainId,
-  useConnections,
-  useDisconnect,
-  useSwitchChain,
-  useWalletClient,
-} from 'wagmi'
-import { baseSepolia, base, sepolia, mainnet } from 'wagmi/chains'
-import type { WalletClient, Account } from 'viem'
-import { x402Client, x402HTTPClient, wrapFetchWithPayment } from '@x402/fetch'
-import { registerExactEvmScheme } from '@x402/evm/exact/client'
-import type { ClientEvmSigner } from '@x402/evm'
-import { getWalletClient } from 'wagmi/actions'
-import { wagmiConfig } from '../lib/wagmi'
-import { getClientConfig } from '../config/env'
+import { useState } from 'react'
 import {
   ArrowUpRight,
   CheckCircle2,
@@ -32,6 +15,7 @@ import {
   Wallet,
   AlertCircle,
 } from 'lucide-react'
+import { ConnectButton } from '@rainbow-me/rainbowkit'
 
 import { Button } from '../components/ui/button'
 import {
@@ -58,61 +42,15 @@ import {
   CollapsibleTrigger,
 } from '../components/ui/collapsible'
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar'
-import { ConnectButton } from '@rainbow-me/rainbowkit'
 
-type CreateAgreementResponse = {
-  agreementId: string
-  docHash: string
-  cid: string
-  creator: string
-  paymentRef: string
-  chainRef: string
-  txHash: string | null
-  confirmed?: boolean
-  link: string
-  alreadyExisted?: boolean
-}
-
-type CreateResult =
-  | { success: true; data: CreateAgreementResponse }
-  | { success: false; error: string }
-  | null
+import { useWalletSetup } from '../hooks/use-wallet-setup'
+import { useAgreementCreate, type CreateAgreementResponse } from '../hooks/use-agreement-create'
+import { buildTxUrl, buildAddressUrl, buildIpfsUrl } from '../lib/network'
+import { getClientConfig } from '../config/env'
 
 function truncateMiddle(value: string, start = 10, end = 8) {
   if (value.length <= start + end + 3) return value
   return `${value.slice(0, start)}…${value.slice(-end)}`
-}
-
-function getExplorerBaseUrl(chainRef?: string): string | null {
-  switch (chainRef) {
-    case 'eip155:84532':
-      return 'https://sepolia.basescan.org'
-    case 'eip155:8453':
-      return 'https://basescan.org'
-    case 'eip155:11155111':
-      return 'https://sepolia.etherscan.io'
-    case 'eip155:1':
-      return 'https://etherscan.io'
-    default:
-      return null
-  }
-}
-
-function buildTxUrl(chainRef: string | undefined, txHash: string | null | undefined) {
-  const baseUrl = getExplorerBaseUrl(chainRef)
-  if (!baseUrl || !txHash) return null
-  return `${baseUrl}/tx/${txHash}`
-}
-
-function buildAddressUrl(chainRef: string | undefined, address: string | undefined) {
-  const baseUrl = getExplorerBaseUrl(chainRef)
-  if (!baseUrl || !address) return null
-  return `${baseUrl}/address/${address}`
-}
-
-function buildIpfsHttpUrl(cid: string | undefined) {
-  if (!cid) return null
-  return `https://ipfs.io/ipfs/${cid}`
 }
 
 function CopyButton({ label, value }: { label: string; value: string }) {
@@ -133,7 +71,6 @@ function CopyButton({ label, value }: { label: string; value: string }) {
                   setCopied(true)
                   window.setTimeout(() => setCopied(false), 900)
                 } catch {
-                  // Clipboard can be blocked by browser settings.
                   setCopied(false)
                 }
               }}
@@ -150,39 +87,39 @@ function CopyButton({ label, value }: { label: string; value: string }) {
   )
 }
 
+function DetailRow(props: {
+  title: string
+  description: string
+  value: React.ReactNode
+  actions?: React.ReactNode
+}) {
+  return (
+    <div className="grid gap-1.5 rounded-lg border bg-background/40 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="grid gap-1">
+          <div className="text-xs font-medium text-muted-foreground">{props.title}</div>
+          <div className="text-xs text-muted-foreground leading-snug">{props.description}</div>
+        </div>
+        {props.actions ? <div className="shrink-0">{props.actions}</div> : null}
+      </div>
+      <div className="mt-1 rounded-md border bg-muted/20 px-2 py-1 font-mono text-xs break-all">
+        {props.value}
+      </div>
+    </div>
+  )
+}
+
 function SuccessSummary({
   data,
   fileName,
 }: {
   data: CreateAgreementResponse
-  fileName?: string | null
+  fileName?: string
 }) {
-  const ipfsUrl = buildIpfsHttpUrl(data.cid)
+  const ipfsUrl = buildIpfsUrl(data.cid)
   const txUrl = buildTxUrl(data.chainRef, data.txHash)
   const creatorUrl = buildAddressUrl(data.chainRef, data.creator)
   const isConfirmed = Boolean(data.confirmed)
-
-  function DetailRow(props: {
-    title: string
-    description: string
-    value: React.ReactNode
-    actions?: React.ReactNode
-  }) {
-    return (
-      <div className="grid gap-1.5 rounded-lg border bg-background/40 p-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="grid gap-1">
-            <div className="text-xs font-medium text-muted-foreground">{props.title}</div>
-            <div className="text-xs text-muted-foreground leading-snug">{props.description}</div>
-          </div>
-          {props.actions ? <div className="shrink-0">{props.actions}</div> : null}
-        </div>
-        <div className="mt-1 rounded-md border bg-muted/20 px-2 py-1 font-mono text-xs break-all">
-          {props.value}
-        </div>
-      </div>
-    )
-  }
 
   return (
     <Card className="w-full border-success/30 bg-success/4">
@@ -236,13 +173,10 @@ function SuccessSummary({
               You can open the agreement above to review it.
             </AlertDescription>
           </Alert>
-
         ) : null}
 
         <div className="grid gap-2 sm:grid-cols-3">
-          <Button
-            render={<a href={data.link} target="_blank" rel="noreferrer" />}
-          >
+          <Button render={<a href={data.link} target="_blank" rel="noreferrer" />}>
             Open agreement
             <ArrowUpRight className="h-4 w-4" />
           </Button>
@@ -341,17 +275,15 @@ function SuccessSummary({
             title="Transaction"
             description={
               data.txHash
-                ? (isConfirmed
-                    ? 'The on-chain transaction that registered this agreement. Verify it on the block explorer.'
-                    : 'The registration transaction was submitted and may take a moment to confirm on-chain. Verify it on the block explorer.')
+                ? isConfirmed
+                  ? 'The on-chain transaction that registered this agreement. Verify it on the block explorer.'
+                  : 'The registration transaction was submitted and may take a moment to confirm on-chain. Verify it on the block explorer.'
                 : data.alreadyExisted
                   ? 'Not available. This can happen if the request was retried and the agreement already existed.'
                   : 'Not available.'
             }
             value={
-              data.txHash ?? (
-                <span className="text-muted-foreground">(no transaction hash)</span>
-              )
+              data.txHash ?? <span className="text-muted-foreground">(no transaction hash)</span>
             }
             actions={data.txHash ? <CopyButton label="txHash" value={data.txHash} /> : undefined}
           />
@@ -374,189 +306,31 @@ function SuccessSummary({
   )
 }
 
-/**
- * Converts a wagmi/viem WalletClient to a ClientEvmSigner for x402Client
- */
-function wagmiToClientSigner(walletClient: WalletClient): ClientEvmSigner {
-  if (!walletClient.account) {
-    throw new Error('Wallet client must have an account')
-  }
-
-  return {
-    address: walletClient.account.address,
-    signTypedData: async (message) => {
-      const signature = await walletClient.signTypedData({
-        account: walletClient.account as Account,
-        domain: message.domain,
-        types: message.types,
-        primaryType: message.primaryType,
-        message: message.message,
-      })
-      return signature
-    },
-  }
-}
-
 export const Route = createFileRoute('/create')({
-  ssr: false, // Disable SSR to avoid hydration errors with Wagmi
+  ssr: false,
   component: CreatePage,
 })
 
 function CreatePage() {
   const [file, setFile] = useState<File | null>(null)
-  const [result, setResult] = useState<CreateResult>(null)
-  const [loading, setLoading] = useState(false)
-  const [isWalletReady, setIsWalletReady] = useState(false)
-  const [lastSubmittedFileName, setLastSubmittedFileName] = useState<string | null>(null)
-  const walletClientRef = useRef<WalletClient | null>(null)
-
-  const { isConnected, address } = useAccount()
-  const chainId = useChainId()
-
-  const connections = useConnections()
-  const activeConnector = connections[0]?.connector
-  const { disconnect } = useDisconnect()
-  const { switchChain, isPending: isSwitchingChain } = useSwitchChain()
-  const { data: walletClient } = useWalletClient({ connector: activeConnector })
-  
-  // Get configuration
+  const wallet = useWalletSetup()
+  const agreement = useAgreementCreate()
   const config = getClientConfig()
-  
-  // Determine the correct chain ID based on environment variables
-  const getExpectedChainId = () => {
-    const networkName = config.blockchain.networkName
-    switch (networkName.toLowerCase()) {
-      case 'base sepolia': return baseSepolia.id
-      case 'base-sepolia': return baseSepolia.id
-      case 'base mainnet': return base.id
-      case 'base': return base.id
-      case 'sepolia': return sepolia.id
-      case 'mainnet': return mainnet.id
-      default: return baseSepolia.id
-    }
+
+  const handleCreate = () => {
+    if (!file || !wallet.address) return
+    agreement.create(file, wallet.address, wallet.getSigner)
   }
 
-  const expectedChainId = getExpectedChainId()
-  const isCorrectChain = chainId === expectedChainId
-
-  // Store walletClient ref when available
-  useEffect(() => {
-    let cancelled = false
-
-    const setupWallet = async () => {
-      if (!isCorrectChain) {
-        if (!cancelled) {
-          walletClientRef.current = null
-          setIsWalletReady(false)
-        }
-        return
-      }
-
-      try {
-        const client =
-          walletClient ??
-          (await getWalletClient(wagmiConfig).catch(() => null))
-
-        if (!client || !client.account?.address) {
-          if (!cancelled) {
-            walletClientRef.current = null
-            setIsWalletReady(false)
-          }
-          return
-        }
-        
-        if (!cancelled) {
-          walletClientRef.current = client
-          setIsWalletReady(true)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          walletClientRef.current = null
-          setIsWalletReady(false)
-        }
-      }
-    }
-
-    setupWallet()
-
-    return () => {
-      cancelled = true
-    }
-  }, [walletClient, isCorrectChain, chainId, expectedChainId])
-
-  const handleCreate = async () => {
-    if (!walletClientRef.current || !file) return
-    if (!isCorrectChain) return
-
-    setLoading(true)
-    setResult(null)
-    setLastSubmittedFileName(file.name)
-
-    try {
-      // 1) Read PDF as base64
-      const buf = await file.arrayBuffer()
-      const bytes = new Uint8Array(buf)
-      let binary = ''
-      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!)
-      const fileBase64 = btoa(binary)
-
-      // Create x402 client and register EVM scheme with wagmi signer
-      const client = new x402Client()
-      const httpClient = new x402HTTPClient(client)
-      const signer = wagmiToClientSigner(walletClientRef.current)
-      registerExactEvmScheme(client, { signer })
-
-      // Wrap fetch with payment handling
-      const fetchWithPayment = wrapFetchWithPayment(fetch, client)
-      
-      const res = await fetchWithPayment('/api/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileBase64,
-          fileName: file.name,
-          creatorAddress: address,
-        }),
-      })
-
-      if (res.ok) {
-        const body = await res.json() as CreateAgreementResponse
-        setResult({ success: true, data: body })
-      } else if (res.status === 402) {
-        // When payment was attempted and we still get 402, this is usually either:
-        // - verification failed (PAYMENT-REQUIRED header with error)
-        // - settlement failed (JSON body with { error, details })
-        const body = await res.json().catch(() => null) as any
-
-        let errorMessage = 'Payment required'
-        if (body && typeof body === 'object' && typeof body.error === 'string') {
-          errorMessage = typeof body.details === 'string' ? `${body.error}: ${body.details}` : body.error
-        } else {
-          try {
-            const paymentRequired = httpClient.getPaymentRequiredResponse((name) => res.headers.get(name))
-            if (paymentRequired.error) errorMessage = paymentRequired.error
-          } catch (err) {
-            errorMessage = err instanceof Error ? err.message : String(err)
-          }
-        }
-
-        setResult({ success: false, error: errorMessage })
-      } else {
-        const body = await res.json().catch(() => ({})) as any
-        setResult({ success: false, error: body?.error || `Request failed (${res.status})` })
-      }
-    } catch (e: any) {
-      setResult({ success: false, error: e.message || String(e) })
-    } finally {
-      setLoading(false)
-    }
+  const handleReset = () => {
+    setFile(null)
+    agreement.reset()
   }
 
-  // --- CONNECT SCREEN ---
-  if (!isConnected) {
+  // Connect screen
+  if (!wallet.isConnected) {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
-        
         <Card className="w-full max-w-md z-10">
           <CardHeader className="text-center">
             <div className="mx-auto mb-4 bg-primary/10 p-3 rounded-full w-fit">
@@ -577,67 +351,58 @@ function CreatePage() {
     )
   }
 
-  // --- CREATE SCREEN ---
+  // Create screen
   return (
     <div className="min-h-screen bg-background text-foreground p-6">
-      
       <div className="max-w-2xl mx-auto pt-10">
         <div className="flex items-center justify-between mb-8">
-           <h1 className="text-3xl font-bold">New Handshake</h1>
-           <div className="flex items-center gap-4">
-             {address && (
-                <div className="flex items-center gap-2 bg-muted/50 pl-2 pr-4 py-1.5 rounded-full border">
-                  <Avatar className="h-6 w-6">
-                    <AvatarImage src={`https://effigy.im/a/${address}.png`} />
-                    <AvatarFallback>Ox</AvatarFallback>
-                  </Avatar>
-                  <span className="text-sm font-medium">
-                    {address.slice(0, 6)}...{address.slice(-4)}
-                  </span>
-                </div>
-             )}
-             <Button 
-               variant="ghost" 
-               size="sm"
-               className="text-destructive hover:text-destructive hover:bg-destructive/10"
-               onClick={() => disconnect()}
-             >
-               Disconnect
-             </Button>
-           </div>
+          <h1 className="text-3xl font-bold">New Handshake</h1>
+          <div className="flex items-center gap-4">
+            {wallet.address && (
+              <div className="flex items-center gap-2 bg-muted/50 pl-2 pr-4 py-1.5 rounded-full border">
+                <Avatar className="h-6 w-6">
+                  <AvatarImage src={`https://effigy.im/a/${wallet.address}.png`} />
+                  <AvatarFallback>Ox</AvatarFallback>
+                </Avatar>
+                <span className="text-sm font-medium">
+                  {wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+                </span>
+              </div>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={() => wallet.disconnect()}
+            >
+              Disconnect
+            </Button>
+          </div>
         </div>
 
-        {!isCorrectChain && (
+        {!wallet.isCorrectChain && (
           <Alert variant="error" className="mb-6">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Wrong Network</AlertTitle>
             <AlertDescription className="flex items-center justify-between">
-              <span>This app requires {config.blockchain.networkName}.</span>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <span>This app requires {wallet.networkName}.</span>
+              <Button
+                variant="outline"
+                size="sm"
                 className="ml-4"
-                onClick={() => switchChain({ chainId: expectedChainId })}
-                disabled={isSwitchingChain}
+                onClick={wallet.switchToExpectedChain}
+                disabled={wallet.isSwitchingChain}
               >
-                {isSwitchingChain ? 'Switching...' : 'Switch Network'}
+                {wallet.isSwitchingChain ? 'Switching...' : 'Switch Network'}
               </Button>
             </AlertDescription>
           </Alert>
         )}
 
-        {result?.success ? (
+        {agreement.result?.success ? (
           <div className="grid gap-3">
-            <SuccessSummary data={result.data} fileName={lastSubmittedFileName} />
-            <Button
-              size="lg"
-              className="w-full"
-              onClick={() => {
-                setFile(null)
-                setResult(null)
-                setLastSubmittedFileName(null)
-              }}
-            >
+            <SuccessSummary data={agreement.result.data} fileName={agreement.result.fileName} />
+            <Button size="lg" className="w-full" onClick={handleReset}>
               <RotateCcw className="h-4 w-4" />
               Create another agreement
             </Button>
@@ -647,7 +412,8 @@ function CreatePage() {
             <CardHeader>
               <CardTitle>Start agreement</CardTitle>
               <CardDescription>
-                Upload a PDF. The server will keccak256 hash it, pin it to IPFS (Pinata), and register it on-chain.
+                Upload a PDF. The server will keccak256 hash it, pin it to IPFS (Pinata), and
+                register it on-chain.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -661,12 +427,13 @@ function CreatePage() {
                   onChange={(e) => {
                     const f = e.target.files?.[0] ?? null
                     setFile(f)
-                    setResult(null)
+                    agreement.reset()
                   }}
                 />
                 {file && (
                   <div className="text-xs text-muted-foreground break-all">
-                    Selected: <span className="font-mono">{file.name}</span> ({Math.round(file.size / 1024)} KB)
+                    Selected: <span className="font-mono">{file.name}</span> (
+                    {Math.round(file.size / 1024)} KB)
                   </div>
                 )}
               </div>
@@ -692,10 +459,10 @@ function CreatePage() {
               <Button
                 className="w-full"
                 size="lg"
-                disabled={loading || !isWalletReady || !file || !isCorrectChain}
+                disabled={agreement.isLoading || !wallet.isWalletReady || !file || !wallet.isCorrectChain}
                 onClick={handleCreate}
               >
-                {loading ? (
+                {agreement.isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                     Processing...
@@ -705,13 +472,11 @@ function CreatePage() {
                 )}
               </Button>
 
-              {result?.success === false && (
+              {agreement.result?.success === false && (
                 <Alert variant="error">
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle>Error</AlertTitle>
-                  <AlertDescription>
-                    {result.error}
-                  </AlertDescription>
+                  <AlertDescription>{agreement.result.error}</AlertDescription>
                 </Alert>
               )}
             </CardFooter>

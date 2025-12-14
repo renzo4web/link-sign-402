@@ -1,9 +1,7 @@
 import { Hono } from "hono";
 import { logger } from "hono/logger";
 import { requestId, type RequestIdVariables } from "hono/request-id";
-import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
-import { ExactEvmScheme } from "@x402/evm/exact/server";
-import { HTTPFacilitatorClient } from "@x402/core/server";
+import { paymentMiddleware } from "@x402/hono";
 import { createCdpAuthHeaders } from "@coinbase/x402";
 import handler from "@tanstack/react-start/server-entry";
 import { getServerConfig } from "./config/env";
@@ -18,35 +16,38 @@ import {
 import { getNetworkCaip2 } from "./lib/network";
 import { uploadToIPFS } from "./lib/pinata";
 import { validateCreateBody, ValidationError } from "./lib/validation";
+import { createX402InitMiddleware } from "./lib/x402-init";
 
+// Logging
 export const customLogger = (message: string, ...rest: string[]) => {
   console.log(message, ...rest);
 };
 
-const app = new Hono<{ Variables: RequestIdVariables }>()
-
+// Config
 const config = getServerConfig();
 const payTo = config.blockchain.payToAddress as `0x${string}`;
 const networkCaip2 = getNetworkCaip2(config.blockchain.network);
-
-const facilitatorUrl = "https://api.cdp.coinbase.com/platform/v2/x402";
 
 if (!config.cdp.apiKeyId || !config.cdp.apiKeySecret) {
   throw new Error("CDP_API_KEY_ID and CDP_API_KEY_SECRET required");
 }
 
-const facilitatorClient = new HTTPFacilitatorClient({
-  url: facilitatorUrl,
-  createAuthHeaders: createCdpAuthHeaders(
-    config.cdp.apiKeyId,
-    config.cdp.apiKeySecret,
-  ),
-});
+// x402 payment setup (lazy init for Workers, see lib/x402-init.ts)
+const CDP_FACILITATOR_URL = "https://api.cdp.coinbase.com/platform/v2/x402";
+const cdpAuthHeaders = createCdpAuthHeaders(config.cdp.apiKeyId, config.cdp.apiKeySecret);
 
-const resourceServer = new x402ResourceServer(facilitatorClient).register(
-  networkCaip2,
-  new ExactEvmScheme(),
-);
+if (!cdpAuthHeaders) {
+  throw new Error("Failed to create CDP auth headers");
+}
+
+const { middleware: x402InitMiddleware, resourceServer } = createX402InitMiddleware({
+  facilitatorUrl: CDP_FACILITATOR_URL,
+  network: networkCaip2,
+  createAuthHeaders: cdpAuthHeaders,
+  logger: customLogger,
+  isProtectedRequest: (method, path) =>
+    method.toUpperCase() === "POST" && path === "/api/create",
+});
 
 resourceServer
   .onVerifyFailure(async ({ requirements, error }) => {
@@ -69,21 +70,13 @@ resourceServer
     customLogger(`[x402] settle: ${result.success ? "✓" : "✗"} tx=${tx}`);
   });
 
-await resourceServer.initialize();
-customLogger(`[x402] Init: ${networkCaip2} → ${payTo}`);
+customLogger(`[x402] config: ${networkCaip2} → ${payTo}`);
 
-// 1. Request ID middleware
+// Hono app
+const app = new Hono<{ Variables: RequestIdVariables }>();
 app.use("*", requestId({ headerName: "x-request-id" }));
-
-// 2. Logger
 app.use("*", logger(customLogger));
-
-// 3. x402 payment middleware
-// CRITICAL: syncFacilitatorOnStart MUST be false when using Vite dev server / TanStack Start.
-// When true, the middleware attempts to sync with the facilitator during request processing,
-// which hangs in Vite's async context. We initialize the resourceServer above at module level
-// (await resourceServer.initialize()) before any requests are handled, so the middleware can
-// safely use syncFacilitatorOnStart=false and rely on the pre-initialized state.
+app.use("/api/*", x402InitMiddleware);
 app.use(
   paymentMiddleware(
     {
@@ -101,36 +94,38 @@ app.use(
       },
     },
     resourceServer,
-    undefined, // verifyCallback
-    undefined, // settleCallback
-    false, // syncFacilitatorOnStart
+    undefined,
+    undefined,
+    false, // syncFacilitatorOnStart=false, we use x402InitMiddleware
   ),
 );
 
+// Error handler
 app.onError((error, c) => {
-  const requestId = c.get("requestId");
+  const reqId = c.get("requestId");
   const msg = error instanceof Error ? error.message : String(error);
-  customLogger(`[error] ${c.req.method} ${c.req.path} - ${msg} (${requestId})`);
+  customLogger(`[error] ${c.req.method} ${c.req.path} - ${msg} (${reqId})`);
 
   if (c.req.path.startsWith("/api/")) {
     const status = error instanceof ValidationError ? 400 : 500;
-    return c.json({ error: msg, requestId }, status);
+    return c.json({ error: msg, requestId: reqId }, status);
   }
 
   return c.text("Internal Server Error", 500);
 });
 
-const APP_DOMAIN = 'https://linksignx402.xyz'
-const getAgreementLink = (id: string) => `${APP_DOMAIN}/a/${id}`
+// Routes
+const APP_DOMAIN = "https://linksignx402.xyz";
+const getAgreementLink = (id: string) => `${APP_DOMAIN}/a/${id}`;
 
-app.post('/api/create', async (c) => {
-  const requestId = c.get('requestId')
+app.post("/api/create", async (c) => {
+  const reqId = c.get("requestId");
 
   const body = await c.req.json().catch(() => null);
   const { fileName, creatorAddress, fileBytes } = validateCreateBody(body);
 
   customLogger(
-    `[create] ${fileName} (${fileBytes.length}b) by ${creatorAddress.slice(0, 6)}… (${requestId})`,
+    `[create] ${fileName} (${fileBytes.length}b) by ${creatorAddress.slice(0, 6)}… (${reqId})`,
   );
 
   const docHash = keccak256(fileBytes) as Hash;
@@ -140,15 +135,15 @@ app.post('/api/create', async (c) => {
     cid = await uploadToIPFS(fileBytes, fileName);
   } catch (err) {
     customLogger(
-      `[create] ipfs failed: ${err instanceof Error ? err.message : err} (${requestId})`,
+      `[create] ipfs failed: ${err instanceof Error ? err.message : err} (${reqId})`,
     );
-    return c.json({ error: "IPFS upload failed", requestId }, 502);
+    return c.json({ error: "IPFS upload failed", requestId: reqId }, 502);
   }
   customLogger(`[create] ipfs: ${cid}`);
 
   const paymentHeader = c.req.header("PAYMENT-SIGNATURE");
   if (!paymentHeader) {
-    return c.json({ error: "Missing PAYMENT-SIGNATURE", requestId }, 402);
+    return c.json({ error: "Missing PAYMENT-SIGNATURE", requestId: reqId }, 402);
   }
 
   const paymentRef = keccak256(toBytes(paymentHeader)) as Hash;
@@ -167,7 +162,7 @@ app.post('/api/create', async (c) => {
   });
 
   if (alreadyExists) {
-    customLogger(`[create] already exists (${requestId})`);
+    customLogger(`[create] already exists (${reqId})`);
     return c.json({
       agreementId,
       docHash,
@@ -196,7 +191,7 @@ app.post('/api/create', async (c) => {
     waitForConfirmation: true,
   });
 
-  customLogger(`[create] registered: ${contractTx.txHash} (${requestId})`);
+  customLogger(`[create] registered: ${contractTx.txHash} (${reqId})`);
 
   return c.json({
     agreementId,
@@ -211,6 +206,7 @@ app.post('/api/create', async (c) => {
   });
 });
 
+// SSR fallback
 app.all("*", (c) => handler.fetch(c.req.raw));
 
 export default app;

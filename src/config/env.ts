@@ -46,6 +46,10 @@ function createServerConfig() {
       // Optional override for CAIP-2 chainRef (e.g. "eip155:84532").
       // If omitted, the server will derive it from BLOCKCHAIN_NETWORK.
       chainRef: process.env.BLOCKCHAIN_CHAIN_REF,
+      // Block number when the contract was deployed (for efficient log queries).
+      contractStartBlock: BigInt(
+        getEnvVar('CONTRACT_START_BLOCK', process.env.CONTRACT_START_BLOCK)
+      ),
     },
 
     // Pinata (Server-side)

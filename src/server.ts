@@ -1,22 +1,40 @@
 import { Hono } from "hono";
 import { logger } from "hono/logger";
 import { requestId, type RequestIdVariables } from "hono/request-id";
-import { paymentMiddleware } from "@x402/hono";
 import { createCdpAuthHeaders } from "@coinbase/x402";
 import handler from "@tanstack/react-start/server-entry";
 import { getServerConfig } from "./config/env";
-import { keccak256, toBytes, type Address, type Hash } from "viem";
 import {
-  assertBytes32,
+  createPublicClient,
+  http,
+  keccak256,
+  parseAbiItem,
+  type Address,
+  type Hash,
+} from "viem";
+import {
+  AGREEMENT_CREATED_EVENT,
+  AGREEMENT_SIGNED_EVENT,
   checkAgreementExists,
+  checkHasSigned,
   computeAgreementId,
   networkToChainRef,
+  recordSignature,
   registerAgreement,
 } from "./lib/agreement-oracle";
-import { getNetworkCaip2 } from "./lib/network";
+import { buildAddressUrl, buildTxUrl, getNetworkCaip2 } from "./lib/network";
 import { uploadToIPFS } from "./lib/pinata";
-import { validateCreateBody, ValidationError } from "./lib/validation";
+import {
+  validateCreateBody,
+  validateSignBody,
+  ValidationError,
+} from "./lib/validation";
 import { createX402InitMiddleware } from "./lib/x402-init";
+import {
+  processPayment,
+  handlePaymentError,
+  type PaymentConfig,
+} from "./lib/x402-payment";
 
 // Logging
 export const customLogger = (message: string, ...rest: string[]) => {
@@ -45,8 +63,10 @@ const { middleware: x402InitMiddleware, resourceServer } = createX402InitMiddlew
   network: networkCaip2,
   createAuthHeaders: cdpAuthHeaders,
   logger: customLogger,
-  isProtectedRequest: (method, path) =>
-    method.toUpperCase() === "POST" && path === "/api/create",
+  isProtectedRequest: (method, path) => {
+    const m = method.toUpperCase();
+    return m === "POST" && (path === "/api/create" || path === "/api/sign");
+  },
 });
 
 resourceServer
@@ -72,33 +92,22 @@ resourceServer
 
 customLogger(`[x402] config: ${networkCaip2} → ${payTo}`);
 
+// Payment config
+const paymentConfig: PaymentConfig = {
+  network: networkCaip2,
+  payTo: payTo,
+  usdcAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", // Base Sepolia USDC
+  prices: {
+    create: config.payment.createPrice,
+    sign: config.payment.signPrice,
+  },
+};
+
 // Hono app
 const app = new Hono<{ Variables: RequestIdVariables }>();
 app.use("*", requestId({ headerName: "x-request-id" }));
 app.use("*", logger(customLogger));
 app.use("/api/*", x402InitMiddleware);
-app.use(
-  paymentMiddleware(
-    {
-      "POST /api/create": {
-        accepts: [
-          {
-            scheme: "exact",
-            price: config.payment.createPrice,
-            network: networkCaip2,
-            payTo,
-          },
-        ],
-        description: "Create agreement",
-        mimeType: "application/json",
-      },
-    },
-    resourceServer,
-    undefined,
-    undefined,
-    false, // syncFacilitatorOnStart=false, we use x402InitMiddleware
-  ),
-);
 
 // Error handler
 app.onError((error, c) => {
@@ -117,6 +126,85 @@ app.onError((error, c) => {
 // Routes
 const APP_DOMAIN = "https://linksignx402.xyz";
 const getAgreementLink = (id: string) => `${APP_DOMAIN}/a/${id}`;
+
+app.get("/api/agreement/:id", async (c) => {
+  const reqId = c.get("requestId");
+  const id = c.req.param("id");
+
+  if (!/^0x[0-9a-fA-F]{64}$/.test(id)) {
+    return c.json({ error: "Invalid agreementId", requestId: reqId }, 400);
+  }
+
+  const publicClient = createPublicClient({
+    transport: http(config.blockchain.rpcUrl),
+  });
+
+  // Use max range of 99,999 blocks (under 100k limit) from current block
+  const MAX_BLOCK_RANGE = 99_999n;
+  const currentBlock = await publicClient.getBlockNumber();
+  const startBlock = config.blockchain.contractStartBlock;
+  // Never go before contract deployment, and never exceed 100k block range
+  const fromBlock = currentBlock > startBlock + MAX_BLOCK_RANGE
+    ? currentBlock - MAX_BLOCK_RANGE
+    : startBlock;
+
+  const createdLogs = await publicClient.getLogs({
+    address: config.blockchain.contractAddress as Address,
+    event: parseAbiItem(AGREEMENT_CREATED_EVENT),
+    args: { agreementId: id as `0x${string}` },
+    fromBlock,
+    toBlock: currentBlock,
+  });
+
+  const createdLog = createdLogs[0];
+  const created = createdLog?.args as any;
+  if (!created) {
+    return c.json({ error: "Agreement not found", requestId: reqId }, 404);
+  }
+
+  // Use creation block as starting point for signature queries
+  const creationBlock = createdLog.blockNumber ?? fromBlock;
+
+  const signedLogs = await publicClient.getLogs({
+    address: config.blockchain.contractAddress as Address,
+    event: parseAbiItem(AGREEMENT_SIGNED_EVENT),
+    args: { agreementId: id as `0x${string}` },
+    fromBlock: creationBlock,
+    toBlock: currentBlock,
+  });
+
+  const ipfsUrl = `https://${config.pinata.gateway}/ipfs/${created.cid}`;
+  const chainRef = created.chainRef || config.blockchain.chainRef || networkToChainRef(config.blockchain.network);
+  const contractAddress = config.blockchain.contractAddress;
+
+  return c.json({
+    agreementId: created.agreementId,
+    docHash: created.docHash,
+    cid: created.cid,
+    ipfsUrl,
+    link: getAgreementLink(id),
+    contract: {
+      address: contractAddress,
+      chainRef,
+      explorerUrl: buildAddressUrl(chainRef, contractAddress),
+    },
+    creator: {
+      address: created.creator,
+      paymentRef: created.paymentRef,
+      chainRef: created.chainRef,
+      explorerUrl: buildTxUrl(created.chainRef, created.paymentRef),
+    },
+    signers: signedLogs.map((log) => {
+      const args = log.args as any;
+      return {
+        address: args.signer,
+        paymentRef: args.paymentRef,
+        chainRef: args.chainRef,
+        explorerUrl: buildTxUrl(args.chainRef, args.paymentRef),
+      };
+    }),
+  });
+});
 
 app.post("/api/create", async (c) => {
   const reqId = c.get("requestId");
@@ -141,13 +229,20 @@ app.post("/api/create", async (c) => {
   }
   customLogger(`[create] ipfs: ${cid}`);
 
-  const paymentHeader = c.req.header("PAYMENT-SIGNATURE");
-  if (!paymentHeader) {
-    return c.json({ error: "Missing PAYMENT-SIGNATURE", requestId: reqId }, 402);
+  // Process payment - GET REAL TX HASH
+  const paymentResult = await processPayment(
+    c,
+    resourceServer,
+    paymentConfig,
+    "create",
+  );
+  if (!paymentResult.success) {
+    return handlePaymentError(c, paymentResult, reqId);
   }
 
-  const paymentRef = keccak256(toBytes(paymentHeader)) as Hash;
-  assertBytes32(paymentRef, "paymentRef");
+  // paymentRef is now the REAL tx hash
+  const paymentRef = paymentResult.txHash;
+  customLogger(`[create] payment settled: ${paymentRef}`);
 
   const chainRef =
     config.blockchain.chainRef || networkToChainRef(config.blockchain.network);
@@ -198,6 +293,85 @@ app.post("/api/create", async (c) => {
     docHash,
     cid,
     creator: creatorAddress,
+    paymentRef,
+    chainRef,
+    txHash: contractTx.txHash,
+    confirmed: contractTx.confirmed,
+    link: getAgreementLink(agreementId),
+  });
+});
+
+app.post("/api/sign", async (c) => {
+  const reqId = c.get("requestId");
+
+  const body = await c.req.json().catch(() => null);
+  const { agreementId, signerAddress } = validateSignBody(body);
+
+  customLogger(
+    `[sign] ${agreementId.slice(0, 10)}… by ${signerAddress.slice(0, 6)}… (${reqId})`,
+  );
+
+  // Validate agreement exists BEFORE processing payment
+  const exists = await checkAgreementExists({
+    rpcUrl: config.blockchain.rpcUrl,
+    network: config.blockchain.network,
+    contractAddress: config.blockchain.contractAddress as Address,
+    agreementId: agreementId as Hash,
+  });
+
+  if (!exists) {
+    return c.json({ error: "Agreement not found", requestId: reqId }, 404);
+  }
+
+  // Check not already signed BEFORE processing payment
+  const alreadySigned = await checkHasSigned({
+    rpcUrl: config.blockchain.rpcUrl,
+    network: config.blockchain.network,
+    contractAddress: config.blockchain.contractAddress as Address,
+    agreementId: agreementId as Hash,
+    signer: signerAddress,
+  });
+
+  if (alreadySigned) {
+    return c.json({ error: "Already signed", requestId: reqId }, 409);
+  }
+
+  // Process payment - GET REAL TX HASH
+  const paymentResult = await processPayment(
+    c,
+    resourceServer,
+    paymentConfig,
+    "sign",
+  );
+  if (!paymentResult.success) {
+    return handlePaymentError(c, paymentResult, reqId);
+  }
+
+  // paymentRef is now the REAL tx hash
+  const paymentRef = paymentResult.txHash;
+  customLogger(`[sign] payment settled: ${paymentRef}`);
+
+  const chainRef =
+    config.blockchain.chainRef || networkToChainRef(config.blockchain.network);
+
+  customLogger(`[sign] recording signature on-chain… (${reqId})`);
+  const contractTx = await recordSignature({
+    rpcUrl: config.blockchain.rpcUrl,
+    network: config.blockchain.network,
+    contractAddress: config.blockchain.contractAddress as Address,
+    serverPrivateKey: config.wallet.privateKey as `0x${string}`,
+    agreementId: agreementId as Hash,
+    signer: signerAddress,
+    paymentRef,
+    chainRef,
+    waitForConfirmation: true,
+  });
+
+  customLogger(`[sign] recorded: ${contractTx.txHash} (${reqId})`);
+
+  return c.json({
+    agreementId,
+    signer: signerAddress,
     paymentRef,
     chainRef,
     txHash: contractTx.txHash,

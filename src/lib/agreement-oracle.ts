@@ -28,7 +28,23 @@ export const agreementOracleAbi = [
     ],
     outputs: [],
   },
+  {
+    type: 'function',
+    name: 'recordSignature',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: '_agreementId', type: 'bytes32' },
+      { name: '_signer', type: 'address' },
+      { name: '_paymentRef', type: 'bytes32' },
+      { name: '_chainRef', type: 'string' },
+    ],
+    outputs: [],
+  },
 ] as const
+
+// Event ABIs for querying logs
+export const AGREEMENT_CREATED_EVENT = 'event AgreementCreated(bytes32 indexed agreementId, bytes32 docHash, string cid, address indexed creator, bytes32 paymentRef, string chainRef)' as const
+export const AGREEMENT_SIGNED_EVENT = 'event AgreementSigned(bytes32 indexed agreementId, address indexed signer, bytes32 paymentRef, string chainRef)' as const
 
 export function networkToChainRef(network: string): string {
   // CAIP-2
@@ -96,13 +112,15 @@ export async function checkAgreementExists(
   try {
     const exists = await publicClient.readContract({
       address: params.contractAddress,
-      abi: [{
-        type: 'function',
-        name: 'agreementExists',
-        stateMutability: 'view',
-        inputs: [{ name: 'agreementId', type: 'bytes32' }],
-        outputs: [{ name: '', type: 'bool' }],
-      }],
+      abi: [
+        {
+          type: 'function',
+          name: 'agreementExists',
+          stateMutability: 'view',
+          inputs: [{ name: 'agreementId', type: 'bytes32' }],
+          outputs: [{ name: '', type: 'bool' }],
+        },
+      ],
       functionName: 'agreementExists',
       args: [params.agreementId],
     })
@@ -110,6 +128,118 @@ export async function checkAgreementExists(
   } catch (err) {
     console.warn('[agreement-oracle] checkAgreementExists failed, assuming false', err)
     return false
+  }
+}
+
+export async function checkHasSigned(
+  params: {
+    rpcUrl: string
+    network: string
+    contractAddress: Address
+    agreementId: Hash
+    signer: Address
+  }
+): Promise<boolean> {
+  const chain = chainForNetwork(params.network)
+  const publicClient = createPublicClient({ chain, transport: http(params.rpcUrl) })
+
+  try {
+    const signed = await publicClient.readContract({
+      address: params.contractAddress,
+      abi: [
+        {
+          type: 'function',
+          name: 'hasSigned',
+          stateMutability: 'view',
+          inputs: [
+            { name: 'agreementId', type: 'bytes32' },
+            { name: 'signer', type: 'address' },
+          ],
+          outputs: [{ name: '', type: 'bool' }],
+        },
+      ],
+      functionName: 'hasSigned',
+      args: [params.agreementId, params.signer],
+    })
+    return Boolean(signed)
+  } catch (err) {
+    console.warn('[agreement-oracle] checkHasSigned failed, assuming false', err)
+    return false
+  }
+}
+
+/**
+ * Internal helper to send a contract transaction with proper error handling.
+ * Eliminates duplication between registerAgreement and recordSignature.
+ */
+async function sendContractTransaction(params: {
+  rpcUrl: string
+  network: string
+  contractAddress: Address
+  serverPrivateKey: Hex
+  functionName: 'registerAgreement' | 'recordSignature'
+  args: any
+  waitForConfirmation?: boolean
+}): Promise<{ txHash: Hash; rpcAccepted: boolean; confirmed: boolean }> {
+  const chain = chainForNetwork(params.network)
+  const account = privateKeyToAccount(params.serverPrivateKey)
+
+  const publicClient = createPublicClient({ chain: chain as any, transport: http(params.rpcUrl) })
+  const walletClient = createWalletClient({
+    chain: chain as any,
+    transport: http(params.rpcUrl),
+    account,
+  })
+
+  // Dry-run for better errors (reverts, bad params, etc.)
+  await publicClient.simulateContract({
+    address: params.contractAddress,
+    abi: agreementOracleAbi,
+    functionName: params.functionName,
+    args: params.args as any,
+    account,
+  })
+
+  const data = encodeFunctionData({
+    abi: agreementOracleAbi,
+    functionName: params.functionName,
+    args: params.args as any,
+  })
+
+  const prepared = await walletClient.prepareTransactionRequest({
+    to: params.contractAddress,
+    data,
+    chain: chain as any,
+    account,
+  })
+
+  const serializedTransaction = await walletClient.signTransaction({
+    ...(prepared as any),
+    chain: chain as any,
+    account,
+  })
+
+  const txHash = keccak256(serializedTransaction) as Hash
+
+  try {
+    await walletClient.sendRawTransaction({ serializedTransaction })
+
+    if (params.waitForConfirmation) {
+      await publicClient.waitForTransactionReceipt({ hash: txHash, confirmations: 1 })
+      return { txHash, rpcAccepted: true, confirmed: true }
+    }
+
+    return { txHash, rpcAccepted: true, confirmed: false }
+  } catch (error: any) {
+    const errorMessage = error?.cause?.reason || error?.message || ''
+    if (errorMessage.includes('already known')) {
+      if (params.waitForConfirmation) {
+        await publicClient.waitForTransactionReceipt({ hash: txHash, confirmations: 1 })
+        return { txHash, rpcAccepted: false, confirmed: true }
+      }
+      return { txHash, rpcAccepted: false, confirmed: false }
+    }
+    throw error
   }
 }
 
@@ -125,18 +255,9 @@ export async function registerAgreement(
     creator: Address
     paymentRef: Hash
     chainRef: string
-    /** If true, wait for the transaction to be mined before returning */
     waitForConfirmation?: boolean
   }
-): Promise<{ txHash: Hash; rpcAccepted: boolean; confirmed: boolean }>
-{
-  const chain = chainForNetwork(params.network)
-  const account = privateKeyToAccount(params.serverPrivateKey)
-
-  // Cast `chain` to avoid TS generic conflicts across unioned chain configs.
-  const publicClient = createPublicClient({ chain: chain as any, transport: http(params.rpcUrl) })
-  const walletClient = createWalletClient({ chain: chain as any, transport: http(params.rpcUrl), account })
-
+): Promise<{ txHash: Hash; rpcAccepted: boolean; confirmed: boolean }> {
   const args = [
     params.agreementId,
     params.docHash,
@@ -146,57 +267,39 @@ export async function registerAgreement(
     params.chainRef,
   ] as const
 
-  // dry-run for better errors (reverts, bad params, etc.)
-  await publicClient.simulateContract({
-    address: params.contractAddress,
-    abi: agreementOracleAbi,
+  return sendContractTransaction({
+    rpcUrl: params.rpcUrl,
+    network: params.network,
+    contractAddress: params.contractAddress,
+    serverPrivateKey: params.serverPrivateKey,
     functionName: 'registerAgreement',
     args,
-    account,
+    waitForConfirmation: params.waitForConfirmation,
   })
+}
 
-  const data = encodeFunctionData({
-    abi: agreementOracleAbi,
-    functionName: 'registerAgreement',
-    args,
-  })
-
-  const prepared = await walletClient.prepareTransactionRequest({
-    to: params.contractAddress,
-    data,
-    chain: chain as any,
-    account,
-  })
-
-  const serializedTransaction = await walletClient.signTransaction({
-    ...(prepared as any),
-    chain: chain as any,
-    account,
-  })
-  const txHash = keccak256(serializedTransaction) as Hash
-
-  try {
-    await walletClient.sendRawTransaction({ serializedTransaction })
-
-    // Optionally wait for transaction to be mined
-    if (params.waitForConfirmation) {
-      await publicClient.waitForTransactionReceipt({ hash: txHash, confirmations: 1 })
-      return { txHash, rpcAccepted: true, confirmed: true }
-    }
-
-    return { txHash, rpcAccepted: true, confirmed: false }
-  } catch (error: any) {
-    const errorMessage = error?.cause?.reason || error?.message || ''
-    if (errorMessage.includes('already known')) {
-      // Node already has this signed tx in its mempool; return the computed hash so
-      // the client can track it on the explorer.
-      // If waiting for confirmation was requested, wait for it even on "already known"
-      if (params.waitForConfirmation) {
-        await publicClient.waitForTransactionReceipt({ hash: txHash, confirmations: 1 })
-        return { txHash, rpcAccepted: false, confirmed: true }
-      }
-      return { txHash, rpcAccepted: false, confirmed: false }
-    }
-    throw error
+export async function recordSignature(
+  params: {
+    rpcUrl: string
+    network: string
+    contractAddress: Address
+    serverPrivateKey: Hex
+    agreementId: Hash
+    signer: Address
+    paymentRef: Hash
+    chainRef: string
+    waitForConfirmation?: boolean
   }
+): Promise<{ txHash: Hash; rpcAccepted: boolean; confirmed: boolean }> {
+  const args = [params.agreementId, params.signer, params.paymentRef, params.chainRef] as const
+
+  return sendContractTransaction({
+    rpcUrl: params.rpcUrl,
+    network: params.network,
+    contractAddress: params.contractAddress,
+    serverPrivateKey: params.serverPrivateKey,
+    functionName: 'recordSignature',
+    args,
+    waitForConfirmation: params.waitForConfirmation,
+  })
 }

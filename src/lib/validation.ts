@@ -1,10 +1,15 @@
-import type { Address } from 'viem'
+import type { Address, Hash } from 'viem'
 
 export interface CreateAgreementInput {
   fileBase64: string
   fileName: string
   creatorAddress: Address
   fileBytes: Uint8Array
+}
+
+export interface SignAgreementInput {
+  agreementId: Hash
+  signerAddress: Address
 }
 
 export class ValidationError extends Error {
@@ -14,7 +19,8 @@ export class ValidationError extends Error {
   }
 }
 
-const EVM_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/
+export const EVM_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/
+export const BYTES32_REGEX = /^0x[a-fA-F0-9]{64}$/
 
 export function base64ToBytes(base64: string): Uint8Array {
   const normalized = base64.replace(/\s/g, '').replace(/-/g, '+').replace(/_/g, '/')
@@ -49,5 +55,26 @@ export function validateCreateBody(body: unknown): CreateAgreementInput {
     fileName: typeof fileName === 'string' && fileName ? fileName : 'agreement.pdf',
     creatorAddress: creatorAddress as Address,
     fileBytes,
+  }
+}
+
+export function validateSignBody(body: unknown): SignAgreementInput {
+  if (!body || typeof body !== 'object') {
+    throw new ValidationError('Invalid JSON body')
+  }
+
+  const { agreementId, signerAddress } = body as Record<string, unknown>
+
+  if (typeof agreementId !== 'string' || !BYTES32_REGEX.test(agreementId)) {
+    throw new ValidationError('Invalid agreementId')
+  }
+
+  if (typeof signerAddress !== 'string' || !EVM_ADDRESS_REGEX.test(signerAddress)) {
+    throw new ValidationError('Invalid signerAddress')
+  }
+
+  return {
+    agreementId: agreementId as Hash,
+    signerAddress: signerAddress as Address,
   }
 }

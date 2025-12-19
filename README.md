@@ -1,7 +1,9 @@
 # LinkSignX402
-> **The Trust-Minimized Digital Handshake.**
 
-LinkSignX402 is a decentralized agreement protocol built for the Web3 era. It allows anyone to upload a PDF, pay a small fee via **x402**, and anchor an immutable proof of existence and signature on the **blockchain**.
+![LinkSignX402 banner](./public/linksign402-banner.png)
+> **The Trust-Minimized Digital Agreement Protocol.**
+
+LinkSignX402 is a decentralized agreement protocol built for the Web3 era. It allows anyone to upload a PDF, pay a small fee via **x402**, and anchor an immutable proof of existence and **multiple signatures** on the **blockchain**.
 
 **Demo:** [https://linksignx402.xyz](https://linksignx402.xyz)
 
@@ -12,7 +14,7 @@ Traditional e-signature platforms rely on centralized databases, private account
 
 - **No Accounts:** Connect your wallet, upload, and sign. No emails or passwords required.
 - **Privacy by Design:** Documents are pinned to IPFS; only cryptographic hashes and payment references live on-chain.
-- **Payment-Backed Intent:** We leverage the **x402 protocol** to make the payment itself a verifiable part of the signature process.
+- **Payment-Backed Intent:** We leverage the **x402 protocol** to make the payment itself a verifiable part of each signature process.
 - **Platform Independence:** Your agreements survive even if we disappear. Everything is verifiable using only public blockchain data and IPFS.
 
 ---
@@ -38,12 +40,30 @@ A slim smart contract acts as the "Source of Truth," emitting events that link:
 ## Trust Model (Independent Verification)
 You don't need to trust our backend. Any third party can verify an agreement's validity:
 
-1. **Query Blockchain:** Read `AgreementCreated` / `AgreementSigned` events from the contract.
+1. **Query Blockchain:** Read `AgreementCreated` and all `AgreementSigned` events from the contract.
 2. **Fetch File:** Download the PDF from IPFS using the `cid` from the event.
 3. **Verify Integrity:** Confirm `keccak256(file) == docHash`.
 4. **Verify Payment:** Confirm the `paymentRef` transaction receipt contains a valid USDC Transfer to our `PAY_TO_ADDRESS`.
 
 **If any check fails, the agreement is tampered or fraudulent.**
+
+---
+
+## AI Agent Ready
+The x402 protocol makes LinkSignX402 a **first-class citizen in the agent economy**. AI agents can autonomously create and sign agreements without human intervention:
+
+1. **Agent requests** `POST /api/create` or `POST /api/sign`
+2. **Server responds** with `402 Payment Required` + payment details
+3. **Agent pays** (signs EIP-712 authorization, facilitator settles)
+4. **Agent retries** the request with payment proof
+5. **Agreement is created/signed** on-chain
+
+This is the power of x402: **any HTTP client that can hold a wallet can transact**. No OAuth, no API keys, no subscription management. Just standard HTTP + crypto signatures.
+
+Use cases unlocked:
+- **Autonomous contract negotiation:** AI agents drafting and signing agreements on behalf of users
+- **Multi-agent workflows:** Multiple AI agents co-signing documents programmatically
+- **24/7 operations:** Agents creating binding agreements while humans sleep
 
 ---
 

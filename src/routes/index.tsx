@@ -25,13 +25,13 @@ function Home() {
         <section className="relative pt-24 pb-24 px-6 text-center">
           <div className="relative z-10 max-w-5xl mx-auto">
             <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-[1.1] text-foreground">
-              Sign Agreements with{' '}
-              <span className="underline decoration-2 underline-offset-4">x402 Protocol</span>
+              Multi-Signature Agreements with{' '}
+              <span className="underline decoration-2 underline-offset-4 text-green-600">x402 Protocol</span>
             </h1>
 
             <p className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              The digital handshake for the crypto era.<br />
-              Create immutable, verifiable agreements without the paperwork.
+              The trust-minimized agreement protocol for the crypto era.<br />
+              Create immutable agreements that multiple parties can sign and verify.
             </p>
 
             <div className="flex flex-wrap items-center justify-center gap-3 mt-8">
@@ -82,10 +82,10 @@ function Home() {
               <div className="h-14 w-14 rounded-xl border border-border/50 flex items-center justify-center mb-5 bg-background/50 backdrop-blur-sm">
                 <FileSignature className="w-7 h-7 text-foreground" />
               </div>
-              <h3 className="text-xl font-bold mb-3">Immutable Proof</h3>
+              <h3 className="text-xl font-bold mb-3">Multi-Signature Support</h3>
               <p className="text-muted-foreground leading-relaxed text-sm md:text-base">
-                Every signature is cryptographically verified and stored on-chain. 
-                A permanent, tamper-proof record.
+                Any number of parties can sign the same agreement. Each signature is 
+                cryptographically verified and stored on-chain with payment proof.
               </p>
             </div>
           </div>
@@ -96,7 +96,7 @@ function Home() {
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-4">Why LinkSign?</h2>
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-              We're rebuilding trust for the internet age using blockchain technology.
+              We're rebuilding multi-party agreements for the internet age using blockchain technology.
             </p>
           </div>
 
